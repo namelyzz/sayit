@@ -17,6 +17,10 @@ import (
 // 定义一个全局的翻译器
 var trans ut.Translator
 
+func GetTranslator() ut.Translator {
+	return trans
+}
+
 /*
 InitTrans 表单验证，结合了不同语言的本地化支持
 用于Gin框架中，结合结构体和自定义验证规则来验证用户提交的数据
@@ -29,7 +33,13 @@ locale 表示选择的语言，en 或 zh
 func InitTrans(locale string) (err error) {
 	// 获取 Gin 的验证器实例
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-		// 自定义 JSON 标签提取函数，用于结构体字段的JSON标签
+		/*
+			自定义 JSON 标签提取函数
+			表单验证返回的错误会自动使用结构体字段名而不是我们定义好的字段名
+			我们的字段名添加在 json 标签中
+			也就是给前端填的字段，比如小写的 re_password，一般和结构体字段不完全一致，比如结构体可能是 RePassword
+			所以我们取出结构体的 json 标签，错误信息使用 json 标签而不是原来结构体的字段名
+		*/
 		v.RegisterTagNameFunc(func(fld reflect.StructField) string {
 			// 提取结构体字段的 json 标签中的第一个部分
 			name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
@@ -87,4 +97,13 @@ func SignUpParamStructLevelValidation(sl validator.StructLevel) {
 		// 第二个参数是字段名，第三个是标签，第四个是规则，第五个是自定义的参数
 		sl.ReportError(su.RePassword, "re_password", "RePassword", "eqfield", "password")
 	}
+}
+
+// RemoveTopStruct 去除提示信息中的结构体名称
+func RemoveTopStruct(fields map[string]string) map[string]string {
+	res := map[string]string{}
+	for field, err := range fields {
+		res[field[strings.Index(field, ".")+1:]] = err
+	}
+	return res
 }

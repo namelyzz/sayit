@@ -1,4 +1,4 @@
-package sayit
+package main
 
 import (
 	"fmt"
@@ -6,12 +6,12 @@ import (
 	"github.com/namelyzz/sayit/dao/mysql"
 	"github.com/namelyzz/sayit/dao/redis"
 	"github.com/namelyzz/sayit/middlewares"
+	"github.com/namelyzz/sayit/router"
 	"github.com/namelyzz/sayit/utils/snowflake"
-	"os"
 )
 
 func main() {
-	if err := config.Init(os.Args[1]); err != nil {
+	if err := config.Init("config/config.yaml"); err != nil {
 		fmt.Printf("load config failed, err:%v\n", err)
 		return
 	}
@@ -38,4 +38,15 @@ func main() {
 		return
 	}
 
+	if err := middlewares.InitTrans("zh"); err != nil {
+		fmt.Printf("init validator trans failed, err:%v\n", err)
+		return
+	}
+
+	r := router.SetupRouter(config.Conf.Mode)
+	err := r.Run(fmt.Sprintf(":%d", config.Conf.Port))
+	if err != nil {
+		fmt.Printf("run server failed, err:%v\n", err)
+		return
+	}
 }
