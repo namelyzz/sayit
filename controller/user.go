@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/namelyzz/sayit/middlewares"
@@ -40,4 +41,44 @@ func SignupHandler(c *gin.Context) {
 	}
 
 	ResponseSuccess(c, nil)
+}
+
+func LoginHandler(c *gin.Context) {
+	p := new(models.ParamLogin)
+	if err := c.ShouldBindJSON(p); err != nil {
+		zap.L().Error("Login with invalid param", zap.Error(err))
+		errs, ok := err.(validator.ValidationErrors)
+		if !ok {
+			ResponseError(c, CodeInvalidParam)
+			return
+		}
+
+		ResponseErrorWithMsg(
+			c,
+			CodeInvalidParam,
+			middlewares.RemoveTopStruct(errs.Translate(middlewares.GetTranslator())),
+		)
+		return
+	}
+
+	user, err := service.Login(p)
+	if err != nil {
+		zap.L().Error("login failed", zap.String("username", p.Username), zap.Error(err))
+		if pkgerr.Is(err, errors.ErrorUserNotExist) {
+			ResponseError(c, CodeUserNotExist)
+			return
+		}
+		if pkgerr.Is(err, errors.ErrorInvalidLogin) {
+			ResponseError(c, CodeInvalidPassword)
+			return
+		}
+
+		ResponseError(c, CodeServerBusy)
+		return
+	}
+
+	ResponseSuccess(c, gin.H{
+		"user_id":   fmt.Sprintf("%d", user.UserID),
+		"user_name": user.Username,
+	})
 }

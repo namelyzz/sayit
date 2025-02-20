@@ -23,3 +23,11 @@ func SignUp(p *models.ParamSignUp) (err error) {
 	// 3. 入库
 	return mysql.InsertUser(user)
 }
+
+func Login(p *models.ParamLogin) (user *models.User, err error) {
+	user = &models.User{Username: p.Username, Password: p.Password}
+	if err = mysql.Login(user); err != nil {
+		return nil, err
+	}
+	return user, nil
+}

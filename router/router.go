@@ -11,8 +11,9 @@ func SetupRouter(mode string) *gin.Engine {
 	r := gin.New()
 	r.Use(middlewares.GinLogger(), middlewares.GinRecovery(true))
 
-	// 注册
-	r.POST("/signup", controller.SignupHandler)
+	// 用户模块
+	r.POST("/signup", controller.SignupHandler) // 注册
+	r.POST("/login", controller.LoginHandler)   // 登录
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.String(http.StatusOK, "pong")

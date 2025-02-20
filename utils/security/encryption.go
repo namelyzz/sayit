@@ -13,3 +13,10 @@ func HashPassword(password string) string {
 	hash.Write([]byte(str))
 	return hex.EncodeToString(hash.Sum(nil))
 }
+
+// VerifyPassword 用来验证用户输入的密码是否正确
+func VerifyPassword(inputPassword, storedHash string) bool {
+	// 用相同的 salt 和 hash 方法加密输入的密码
+	hashedInput := HashPassword(inputPassword)
+	return hashedInput == storedHash
+}
