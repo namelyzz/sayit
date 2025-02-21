@@ -1,8 +1,7 @@
-package controller
+package api
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/namelyzz/sayit/utils/errors"
 	"strconv"
 )
 
@@ -12,12 +11,12 @@ const CtxUserIDKey = "userID"
 func getCurrentUserID(c *gin.Context) (userID int64, err error) {
 	uid, ok := c.Get(CtxUserIDKey)
 	if !ok {
-		err = errors.ErrorUserNotLogin
+		err = ErrorUserNotLogin
 		return
 	}
 	userID, ok = uid.(int64)
 	if !ok {
-		err = errors.ErrorUserNotLogin
+		err = ErrorUserNotLogin
 		return
 	}
 	return

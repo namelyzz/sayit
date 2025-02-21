@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/namelyzz/sayit/dao/mysql"
 	"github.com/namelyzz/sayit/models"
+	"github.com/namelyzz/sayit/utils/jwt"
 	"github.com/namelyzz/sayit/utils/snowflake"
 )
 
@@ -29,5 +30,11 @@ func Login(p *models.ParamLogin) (user *models.User, err error) {
 	if err = mysql.Login(user); err != nil {
 		return nil, err
 	}
+
+	token, err := jwt.CreateJWTToken(user.UserID, user.Username)
+	if err != nil {
+		return nil, err
+	}
+	user.Token = token
 	return user, nil
 }

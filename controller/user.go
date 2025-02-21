@@ -7,8 +7,8 @@ import (
 	"github.com/namelyzz/sayit/middlewares"
 	"github.com/namelyzz/sayit/models"
 	"github.com/namelyzz/sayit/service"
-	"github.com/namelyzz/sayit/utils/errors"
-	pkgerr "github.com/pkg/errors"
+	"github.com/namelyzz/sayit/utils/api"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -18,29 +18,29 @@ func SignupHandler(c *gin.Context) {
 		zap.L().Error("SignUp with invalid param", zap.Error(err))
 		errs, ok := err.(validator.ValidationErrors)
 		if !ok {
-			ResponseError(c, CodeInvalidParam)
+			api.ResponseError(c, api.CodeInvalidParam)
 			return
 		}
 
-		ResponseErrorWithMsg(
+		api.ResponseErrorWithMsg(
 			c,
-			CodeInvalidParam,
+			api.CodeInvalidParam,
 			middlewares.RemoveTopStruct(errs.Translate(middlewares.GetTranslator())),
 		)
 		return
 	}
 
 	if err := service.SignUp(p); err != nil {
-		if pkgerr.Is(err, errors.ErrorUserExist) {
-			ResponseErrorWithMsg(c, CodeUserExist, "用户名已存在")
+		if errors.Is(err, api.ErrorUserExist) {
+			api.ResponseErrorWithMsg(c, api.CodeUserExist, "用户名已存在")
 			return
 		}
 
-		ResponseError(c, CodeServerBusy)
+		api.ResponseError(c, api.CodeServerBusy)
 		return
 	}
 
-	ResponseSuccess(c, nil)
+	api.ResponseSuccess(c, nil)
 }
 
 func LoginHandler(c *gin.Context) {
@@ -49,13 +49,13 @@ func LoginHandler(c *gin.Context) {
 		zap.L().Error("Login with invalid param", zap.Error(err))
 		errs, ok := err.(validator.ValidationErrors)
 		if !ok {
-			ResponseError(c, CodeInvalidParam)
+			api.ResponseError(c, api.CodeInvalidParam)
 			return
 		}
 
-		ResponseErrorWithMsg(
+		api.ResponseErrorWithMsg(
 			c,
-			CodeInvalidParam,
+			api.CodeInvalidParam,
 			middlewares.RemoveTopStruct(errs.Translate(middlewares.GetTranslator())),
 		)
 		return
@@ -64,21 +64,22 @@ func LoginHandler(c *gin.Context) {
 	user, err := service.Login(p)
 	if err != nil {
 		zap.L().Error("login failed", zap.String("username", p.Username), zap.Error(err))
-		if pkgerr.Is(err, errors.ErrorUserNotExist) {
-			ResponseError(c, CodeUserNotExist)
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
 			return
 		}
-		if pkgerr.Is(err, errors.ErrorInvalidLogin) {
-			ResponseError(c, CodeInvalidPassword)
+		if errors.Is(err, api.ErrorInvalidLogin) {
+			api.ResponseError(c, api.CodeInvalidPassword)
 			return
 		}
 
-		ResponseError(c, CodeServerBusy)
+		api.ResponseError(c, api.CodeServerBusy)
 		return
 	}
 
-	ResponseSuccess(c, gin.H{
+	api.ResponseSuccess(c, gin.H{
 		"user_id":   fmt.Sprintf("%d", user.UserID),
 		"user_name": user.Username,
+		"token":     user.Token,
 	})
 }

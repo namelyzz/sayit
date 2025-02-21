@@ -11,13 +11,13 @@ func SetupRouter(mode string) *gin.Engine {
 	r := gin.New()
 	r.Use(middlewares.GinLogger(), middlewares.GinRecovery(true))
 
-	// 用户模块
-	r.POST("/signup", controller.SignupHandler) // 注册
-	r.POST("/login", controller.LoginHandler)   // 登录
+	v1 := r.Group("/api/v1")
 
-	r.GET("/ping", func(c *gin.Context) {
-		c.String(http.StatusOK, "pong")
-	})
+	// 用户模块
+	v1.POST("/signup", controller.SignupHandler) // 注册
+	v1.POST("/login", controller.LoginHandler)   // 登录
+
+	v1.Use(middlewares.JWTAuthMiddleware()) // 应用JWT认证中间件
 
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

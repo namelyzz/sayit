@@ -141,8 +141,8 @@ func GinLogger() gin.HandlerFunc {
 			zap.String("query", query),                      // 查询字符串
 			zap.String("ip", c.ClientIP()),                  // 客户端 IP
 			zap.String("user-agent", c.Request.UserAgent()), // 客户端 UA 信息
-			zap.String("errors", c.Errors.ByType(gin.ErrorTypePrivate).String()), // Gin 中的内部错误
-			zap.Duration("cost", cost), // 请求耗时
+			zap.String("api", c.Errors.ByType(gin.ErrorTypePrivate).String()), // Gin 中的内部错误
+			zap.Duration("cost", cost),                                        // 请求耗时
 		)
 	}
 }
