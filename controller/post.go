@@ -58,3 +58,36 @@ func GetPostDetailHandler(c *gin.Context) {
 
 	api.ResponseSuccess(c, data)
 }
+
+func GetPostListHandler(c *gin.Context) {
+	p := new(models.ParamPostList)
+
+	// 使用 ShouldBindQuery 自动绑定查询参数
+	if err := c.ShouldBindQuery(p); err != nil {
+		zap.L().Warn("invalid query parameters",
+			zap.Error(err),
+			zap.Any("params", p))
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	// 设置默认值并验证参数
+	if err := p.ValidateAndSetDefaults(); err != nil {
+		zap.L().Warn("invalid parameters after validation",
+			zap.Error(err),
+			zap.Any("params", p))
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	data, err := service.GetPostList(p)
+	if err != nil {
+		zap.L().Error("get post list failed",
+			zap.Error(err),
+			zap.Any("params", p))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, data)
+}

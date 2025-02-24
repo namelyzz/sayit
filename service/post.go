@@ -50,3 +50,7 @@ func GetPostDetailByID(postID int64) (res *models.PostDetail, err error) {
 		CommunityDetail: detail,
 	}, nil
 }
+
+func GetPostList(p *models.ParamPostList) (posts []*models.PostListItem, err error) {
+	return mysql.GetPostList(p)
+}

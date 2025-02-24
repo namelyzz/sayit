@@ -25,6 +25,7 @@ func SetupRouter(mode string) *gin.Engine {
 
 		v1.POST("/create_post", controller.CreatePostHandler)
 		v1.GET("/post_detail/:id", controller.GetPostDetailHandler)
+		v1.GET("/posts", controller.GetPostListHandler)
 	}
 
 	r.NoRoute(func(c *gin.Context) {
