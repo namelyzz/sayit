@@ -46,3 +46,16 @@ func Login(user *models.User) (err error) {
 
 	return nil
 }
+
+func GetUserByID(userID int64) (user *models.User, err error) {
+	user = new(models.User)
+	res := db.Model(&models.User{}).
+		Select("user_id", "username").
+		Where("user_id = ?", userID).
+		First(user)
+
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return user, nil
+}

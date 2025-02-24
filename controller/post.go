@@ -6,6 +6,7 @@ import (
 	"github.com/namelyzz/sayit/service"
 	"github.com/namelyzz/sayit/utils/api"
 	"go.uber.org/zap"
+	"strconv"
 )
 
 func CreatePostHandler(c *gin.Context) {
@@ -33,4 +34,27 @@ func CreatePostHandler(c *gin.Context) {
 	}
 
 	api.ResponseSuccess(c, nil)
+}
+
+func GetPostDetailHandler(c *gin.Context) {
+	postIDStr := c.Param("id")
+	postID, err := strconv.ParseInt(postIDStr, 10, 64)
+	if err != nil {
+		zap.L().Error(
+			"get post detail with invalid param",
+			zap.String("invalid post id", postIDStr),
+			zap.Error(err),
+		)
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	data, err := service.GetPostDetailByID(postID)
+	if err != nil {
+		zap.L().Error("service.GetPostDetailByID failed", zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, data)
 }
