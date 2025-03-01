@@ -16,17 +16,7 @@ func SignupHandler(c *gin.Context) {
 	p := new(models.ParamSignUp)
 	if err := c.ShouldBindJSON(p); err != nil {
 		zap.L().Error("SignUp with invalid param", zap.Error(err))
-		errs, ok := err.(validator.ValidationErrors)
-		if !ok {
-			api.ResponseError(c, api.CodeInvalidParam)
-			return
-		}
-
-		api.ResponseErrorWithMsg(
-			c,
-			api.CodeInvalidParam,
-			middlewares.RemoveTopStruct(errs.Translate(middlewares.GetTranslator())),
-		)
+		handleBindError(c, err)
 		return
 	}
 
