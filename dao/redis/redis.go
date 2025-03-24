@@ -12,10 +12,11 @@ var (
 )
 
 const (
-	Prefix             = "sayit:"
-	KeyPostTimeZset    = "post:time"
-	KeyPostScoreZset   = "post:score"
-	KeyPostVotedZsetPF = "post:voted:"
+	Prefix             = "sayit:"      // 公共前缀
+	KeyPostTimeZset    = "post:time"   // zset;帖子及其发帖时间
+	KeyPostScoreZset   = "post:score"  // zset;帖子及其投票的分数
+	KeyPostVotedZsetPF = "post:voted:" // zset;记录用户及其投票类型
+	KeyCommunitySetPF  = "community:"  // set;保存每个分区下帖子的id
 )
 
 func Init(cfg *config.RedisConfig) (err error) {

@@ -10,6 +10,7 @@ import (
 )
 
 func CreatePostHandler(c *gin.Context) {
+	ctx := c.Request.Context()
 	p := new(models.Post)
 	if err := c.ShouldBindJSON(p); err != nil {
 		zap.L().Error("create post with invalid param")
@@ -24,7 +25,7 @@ func CreatePostHandler(c *gin.Context) {
 	}
 
 	p.AuthorID = userID
-	if err = service.CreatePost(p); err != nil {
+	if err = service.CreatePost(ctx, p); err != nil {
 		zap.L().Error("service.CreatePost() failed",
 			zap.Error(err),
 			zap.Int64("userID", userID),
