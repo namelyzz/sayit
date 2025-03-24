@@ -1,6 +1,9 @@
 package models
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ParamSignUp 注册请求参数
 type ParamSignUp struct {
@@ -40,14 +43,26 @@ type SortCondition struct {
 	Direction SortDirection `json:"direction"`
 }
 
+// ParamPostList 获取帖子列表请求参数
 type ParamPostList struct {
-	CommunityID int64         `json:"community_id" form:"community_id"`
-	Page        int           `json:"page" form:"page"`
-	Size        int           `json:"size" form:"size"`
-	Status      int           `json:"status" form:"status"`
-	SortBy      SortField     `json:"sort_by" form:"sort_by"`
-	Order       SortDirection `json:"order" form:"order"`
+	CommunityID int64  `json:"community_id" form:"community_id"`
+	UserName    string `json:"user_name" form:"user_name"`
+	Keyword     string `json:"keyword" form:"keyword"`
+
+	// 按 创建时间 的范围查询
+	StartTime *int64 `json:"start_time" form:"start_time"`
+	EndTime   *int64 `json:"end_time" form:"end_time"`
+
+	Page   int           `json:"page" form:"page"`
+	Size   int           `json:"size" form:"size"`
+	Status *int          `json:"status" form:"status"`
+	SortBy SortField     `json:"sort_by" form:"sort_by"`
+	Order  SortDirection `json:"order" form:"order"`
 }
+
+const (
+	MaxPageSize = 50
+)
 
 func (p *ParamPostList) ValidateAndSetDefaults() error {
 	// 设置默认值, 默认按创建时间倒序排序
@@ -58,9 +73,29 @@ func (p *ParamPostList) ValidateAndSetDefaults() error {
 		p.Order = SortDirectionDesc
 	}
 
-	// 状态筛选（通常只显示正常状态的帖子）
-	if p.Status == 0 {
-		p.Status = 1
+	// 设置分页默认值
+	if p.Page <= 0 {
+		p.Page = 1
+	}
+	if p.Size <= 0 || p.Size > MaxPageSize {
+		p.Size = MaxPageSize
+	}
+
+	// 去除 keyword 和 username 两边空格
+	p.Keyword = strings.TrimSpace(p.Keyword)
+	p.UserName = strings.TrimSpace(p.UserName)
+
+	// 时间范围校验
+	if p.StartTime != nil && p.EndTime != nil {
+		if *p.StartTime > *p.EndTime {
+			return fmt.Errorf("start_time cannot be greater than end_time")
+		}
+	}
+
+	// 状态筛选（通常只显示正常状态的帖子，没有指定则返回有效状态的帖子）
+	if p.Status == nil {
+		defaultStatus := 1
+		p.Status = &defaultStatus
 	}
 
 	// 验证排序字段
