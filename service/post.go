@@ -5,8 +5,10 @@ import (
 	"github.com/namelyzz/sayit/dao/mysql"
 	"github.com/namelyzz/sayit/dao/redis"
 	"github.com/namelyzz/sayit/models"
+	"github.com/namelyzz/sayit/utils/conv"
 	"github.com/namelyzz/sayit/utils/snowflake"
 	"go.uber.org/zap"
+	"time"
 )
 
 /*
@@ -33,12 +35,15 @@ Redis 里帖子 A 分数比帖子 B 高（排前面），
 func CreatePost(ctx context.Context, p *models.Post) (err error) {
 	// 使用雪花算法为帖子生成一个 ID
 	p.PostID = snowflake.GenID()
+	now := time.Now()
+
+	p.CreateTime = now
 	err = mysql.CreatePost(p)
 	if err != nil {
 		return err
 	}
 
-	err = redis.CreatePost(ctx, p.PostID, p.CommunityID)
+	err = redis.CreatePost(ctx, p.PostID, p.CommunityID, float64(now.Unix()))
 	return err
 }
 
@@ -77,5 +82,28 @@ func GetPostDetailByID(postID int64) (res *models.PostDetail, err error) {
 }
 
 func GetPostList(p *models.ParamPostList) (posts []*models.PostListItem, err error) {
+	return mysql.GetPostList(p)
+}
+
+func ListPosts(ctx context.Context, p *models.ParamPostList) (posts []*models.PostListItem, err error) {
+	// 简单查询: 无关键字，无用户名筛选
+	isSimpleQuery := p.UserName == "" && p.Keyword == ""
+	// 跨纬度冲突: 如果按热度排序，但是又指定了时间范围，redis 处理不了
+	isCrossDim := p.SortBy == models.SortFieldScore && (p.StartTime != nil || p.EndTime != nil)
+
+	// 只有“简单查询”且“无维度冲突”才走 Redis
+	if (p.SortBy == models.SortFieldScore || p.SortBy == models.SortFieldCreateTime) && isSimpleQuery && !isCrossDim {
+		var ids []string
+		ids, err = redis.GetPostIDsInOrder(ctx, p)
+		if err != nil {
+			zap.L().Warn("redis.GetPostIDsInOrder failed", zap.Error(err))
+			// 降级走 DB
+			return mysql.GetPostList(p)
+		}
+
+		return mysql.GetPostListByIDs(conv.Strings2Int64s(ids))
+	}
+
+	// 复杂的查询，需要从 mysql 中获取
 	return mysql.GetPostList(p)
 }

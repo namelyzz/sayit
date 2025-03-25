@@ -29,7 +29,7 @@ type PostListItem struct {
 	Title         string    `json:"title"`
 	Summary       string    `json:"summary"` // 内容摘要
 	AuthorID      int64     `json:"author_id"`
-	AuthorName    string    `json:"author_name"`
+	Username      string    `json:"user_name"` //即作者名称
 	CommunityID   int64     `json:"community_id"`
 	CommunityName string    `json:"community_name"`
 	Status        int32     `json:"status"`
