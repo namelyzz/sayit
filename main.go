@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/namelyzz/sayit/config"
 	"github.com/namelyzz/sayit/dao/mysql"
 	"github.com/namelyzz/sayit/dao/redis"
 	"github.com/namelyzz/sayit/middlewares"
 	"github.com/namelyzz/sayit/router"
+	"github.com/namelyzz/sayit/service"
 	"github.com/namelyzz/sayit/utils/snowflake"
 )
 
@@ -32,6 +34,7 @@ func main() {
 		return
 	}
 	defer redis.Close()
+	go service.StartOutboxWorker(context.Background())
 
 	if err := snowflake.Init(config.Conf.StartTime, config.Conf.MachineID); err != nil {
 		fmt.Printf("init snowflake failed, err:%v\n", err)

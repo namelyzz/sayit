@@ -2,3 +2,5 @@ config/*.yaml
 .idea
 *.log
 *.exe
+.gocache
+docs/*

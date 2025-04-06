@@ -63,7 +63,7 @@ func GetPostDetailHandler(c *gin.Context) {
 func GetPostListHandler(c *gin.Context) {
 	p := new(models.ParamPostList)
 
-	// 使用 ShouldBindQuery 自动绑定查询参数
+	// 1. 使用 ShouldBindQuery 自动绑定查询参数
 	if err := c.ShouldBindQuery(p); err != nil {
 		zap.L().Warn("invalid query parameters",
 			zap.Error(err),
@@ -72,7 +72,7 @@ func GetPostListHandler(c *gin.Context) {
 		return
 	}
 
-	// 设置默认值并验证参数
+	// 2. 设置默认值并验证参数
 	if err := p.ValidateAndSetDefaults(); err != nil {
 		zap.L().Warn("invalid parameters after validation",
 			zap.Error(err),
@@ -81,7 +81,8 @@ func GetPostListHandler(c *gin.Context) {
 		return
 	}
 
-	data, err := service.GetPostList(p)
+	// 3. 调用服务层获取帖子列表
+	data, err := service.GetPostList(c.Request.Context(), p)
 	if err != nil {
 		zap.L().Error("get post list failed",
 			zap.Error(err),
@@ -90,5 +91,6 @@ func GetPostListHandler(c *gin.Context) {
 		return
 	}
 
+	// 4. 返回帖子列表
 	api.ResponseSuccess(c, data)
 }

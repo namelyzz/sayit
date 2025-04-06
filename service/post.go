@@ -11,40 +11,37 @@ import (
 	"time"
 )
 
-/*
-CreatePost
+const redisScanBatchSize = 100
 
-这里讨论一个问题：MySQL 中的 CreateTime 和 Redis 中时间排行榜的 Score (时间戳)是否会有差别
-是的，会有细微的差别，但这通常不是问题，在绝大多数工程实践中是可以接受的。
-简而言之，差别在于 MySQL 依赖数据库的默认行为，而 Redis 的逻辑是在 Go 语言的运行时通过 time.Now().Unix() 获取的
-差别有多大？ 通常是 几毫秒到几十毫秒（取决于网络延迟和代码执行速度）。
+var (
+	nowFunc   = time.Now
+	genIDFunc = snowflake.GenID
+)
 
-这个差别有影响吗？几乎没有。
-Redis 里的分数是为了计算“热度”。热度算法通常是 Score = 初始时间 + 投票加权。
-算法本身就是一种近似模型。对于热度排序来说，帖子 A 是 12:00:00.005 发布的，还是 12:00:00.050 发布的，
-根本不影响它在排行榜上的位置。 只要大体顺序对即可。
-另一种用途是前端展示，一般都是分钟级，严苛点可能是秒级，用户不可能肉眼分辨出那几十毫秒的误差。
-
-唯一潜在的极端边缘情况：
-如果有两个帖子在极短的时间内（比如 1ms 间隔）连续发布，可能会出现：
-Redis 里帖子 A 分数比帖子 B 高（排前面），
-但在数据库按 CreateTime 排序时，帖子 B 比 帖子 A 晚。
-导致“最新列表”的顺序在两个数据源中微调。但对于社区类应用，这完全不是 Bug。
-【附修改方案】如果你追求完美的数据一致性，在进入数据库和 Redis 之前，先定格时间，将这个时间传给 dao 层的 redis/mysql 逻辑去写入
-*/
 func CreatePost(ctx context.Context, p *models.Post) (err error) {
-	// 使用雪花算法为帖子生成一个 ID
-	p.PostID = snowflake.GenID()
-	now := time.Now()
+	p.PostID = genIDFunc()
+	now := nowFunc()
 
 	p.CreateTime = now
-	err = mysql.CreatePost(p)
+	event, err := newPostCreatedOutboxEvent(p)
 	if err != nil {
 		return err
 	}
 
-	err = redis.CreatePost(ctx, p.PostID, p.CommunityID, float64(now.Unix()))
-	return err
+	eventID, err := createPostWithOutboxFunc(ctx, p, event)
+	if err != nil {
+		return err
+	}
+	event.ID = eventID
+
+	if err = processOutboxEvent(ctx, event); err != nil {
+		zap.L().Warn("sync post created outbox event failed, will retry",
+			zap.Int64("eventID", event.ID),
+			zap.Int64("postID", p.PostID),
+			zap.Error(err))
+	}
+
+	return nil
 }
 
 func GetPostDetailByID(postID int64) (res *models.PostDetail, err error) {
@@ -81,29 +78,131 @@ func GetPostDetailByID(postID int64) (res *models.PostDetail, err error) {
 	}, nil
 }
 
-func GetPostList(p *models.ParamPostList) (posts []*models.PostListItem, err error) {
+func GetPostList(ctx context.Context, p *models.ParamPostList) (posts []*models.PostListItem, err error) {
+	return ListPosts(ctx, p)
+}
+
+// ListPosts 获取帖子列表, 支持按分数排序和按创建时间排序
+func ListPosts(ctx context.Context, p *models.ParamPostList) (posts []*models.PostListItem, err error) {
+	switch p.SortBy {
+	case models.SortFieldScore:
+		return listPostsByScore(ctx, p)
+	case models.SortFieldCreateTime:
+		if canUseRedisTimeList(p) {
+			offset := (p.Page - 1) * p.Size
+			ids, err := redis.GetPostIDsInOrder(ctx, p, offset, p.Size)
+			if err != nil {
+				zap.L().Warn("redis time list failed, fallback to mysql",
+					zap.Error(err),
+					zap.Any("params", p))
+				return mysql.GetPostList(p)
+			}
+
+			posts, err := mysql.FilterPostListByIDs(conv.Strings2Int64s(ids), p)
+			if err != nil {
+				return nil, err
+			}
+			if len(posts) == len(ids) || len(ids) < p.Size {
+				return posts, nil
+			}
+
+			zap.L().Warn("redis time list underfilled after mysql filters, fallback to mysql",
+				zap.Any("params", p))
+		}
+	}
+
 	return mysql.GetPostList(p)
 }
 
-func ListPosts(ctx context.Context, p *models.ParamPostList) (posts []*models.PostListItem, err error) {
-	// 简单查询: 无关键字，无用户名筛选
-	isSimpleQuery := p.UserName == "" && p.Keyword == ""
-	// 跨纬度冲突: 如果按热度排序，但是又指定了时间范围，redis 处理不了
-	isCrossDim := p.SortBy == models.SortFieldScore && (p.StartTime != nil || p.EndTime != nil)
-
-	// 只有“简单查询”且“无维度冲突”才走 Redis
-	if (p.SortBy == models.SortFieldScore || p.SortBy == models.SortFieldCreateTime) && isSimpleQuery && !isCrossDim {
-		var ids []string
-		ids, err = redis.GetPostIDsInOrder(ctx, p)
-		if err != nil {
-			zap.L().Warn("redis.GetPostIDsInOrder failed", zap.Error(err))
-			// 降级走 DB
-			return mysql.GetPostList(p)
-		}
-
-		return mysql.GetPostListByIDs(conv.Strings2Int64s(ids))
+// listPostsByScore 按分数排序获取帖子列表
+func listPostsByScore(ctx context.Context, p *models.ParamPostList) ([]*models.PostListItem, error) {
+	// 复杂的分数查询需要 MySQL 过滤
+	if hasComplexScoreFilters(p) {
+		return listPostsByScoreWithFilters(ctx, p)
 	}
 
-	// 复杂的查询，需要从 mysql 中获取
-	return mysql.GetPostList(p)
+	// 简单的分数查询可以从 Redis 时间列表中获取
+	offset := (p.Page - 1) * p.Size
+	ids, err := redis.GetPostIDsInOrder(ctx, p, offset, p.Size)
+	if err != nil {
+		zap.L().Warn("redis score list failed, fallback to mysql create_time desc",
+			zap.Error(err),
+			zap.Any("params", p))
+		return fallbackPostListByCreateTime(p)
+	}
+
+	// 从 MySQL 中过滤帖子列表
+	posts, err := mysql.FilterPostListByIDs(conv.Strings2Int64s(ids), p)
+	if err != nil {
+		return nil, err
+	}
+	// 如果 Redis 中的帖子列表足够，直接返回
+	if len(posts) == len(ids) || len(ids) < p.Size {
+		return posts, nil
+	}
+
+	// 数量不足，记录警告日志并使用带过滤的方法重试
+	zap.L().Warn("score list underfilled after mysql filters, retry with redis scan",
+		zap.Any("params", p))
+	return listPostsByScoreWithFilters(ctx, p)
+}
+
+// listPostsByScoreWithFilters 带过滤条件的按分数排序获取帖子列表, 用于复杂的分数查询
+func listPostsByScoreWithFilters(ctx context.Context, p *models.ParamPostList) ([]*models.PostListItem, error) {
+	targetCount := p.Page * p.Size
+	matched := make([]*models.PostListItem, 0, targetCount)
+
+	// 批量获取帖子，直到达到目标数量
+	for offset := 0; len(matched) < targetCount; offset += redisScanBatchSize {
+		ids, err := redis.GetPostIDsInOrder(ctx, p, offset, redisScanBatchSize)
+		if err != nil {
+			zap.L().Warn("redis score scan failed, fallback to mysql create_time desc",
+				zap.Error(err),
+				zap.Any("params", p),
+				zap.Int("offset", offset))
+			return fallbackPostListByCreateTime(p)
+		}
+		if len(ids) == 0 {
+			break
+		}
+
+		// 根据 ID 去 Mysql 批量查询
+		items, err := mysql.FilterPostListByIDs(conv.Strings2Int64s(ids), p)
+		if err != nil {
+			return nil, err
+		}
+		matched = append(matched, items...)
+		if len(ids) < redisScanBatchSize {
+			break
+		}
+	}
+
+	// 计算当前页的起始索引和结束索引, 然后返回当前页的帖子列表
+	start := (p.Page - 1) * p.Size
+	if start >= len(matched) {
+		return []*models.PostListItem{}, nil
+	}
+
+	end := start + p.Size
+	if end > len(matched) {
+		end = len(matched)
+	}
+
+	return matched[start:end], nil
+}
+
+func canUseRedisTimeList(p *models.ParamPostList) bool {
+	return p.SortBy == models.SortFieldCreateTime && p.UserName == "" && p.Keyword == ""
+}
+
+func hasComplexScoreFilters(p *models.ParamPostList) bool {
+	return p.UserName != "" || p.Keyword != "" || p.StartTime != nil || p.EndTime != nil
+}
+
+// fallbackPostListByCreateTime 按创建时间排序获取帖子列表, 用于当 Redis 查询异常时 fallback 到 MySQL
+func fallbackPostListByCreateTime(p *models.ParamPostList) ([]*models.PostListItem, error) {
+	fallback := *p
+	fallback.SortBy = models.SortFieldCreateTime
+	fallback.Order = models.SortDirectionDesc
+	return mysql.GetPostList(&fallback)
 }

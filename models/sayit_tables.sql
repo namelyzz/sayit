@@ -56,3 +56,20 @@ CREATE TABLE `post` (
                         KEY `idx_author_id` (`author_id`),
                         KEY `idx_community_id` (`community_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `outbox_events`;
+CREATE TABLE `outbox_events` (
+                                 `id` bigint(20) NOT NULL AUTO_INCREMENT,
+                                 `event_type` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
+                                 `aggregate_id` bigint(20) NOT NULL,
+                                 `payload` json NOT NULL,
+                                 `retry_count` int NOT NULL DEFAULT 0,
+                                 `next_retry_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                 `last_error` varchar(512) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '',
+                                 `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+                                 `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                 PRIMARY KEY (`id`),
+                                 KEY `idx_next_retry_at` (`next_retry_at`),
+                                 KEY `idx_event_type` (`event_type`),
+                                 KEY `idx_aggregate_id` (`aggregate_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

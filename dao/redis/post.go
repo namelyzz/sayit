@@ -37,14 +37,18 @@ func CreatePost(ctx context.Context, postID, communityID int64, score float64) e
 }
 
 // GetPostIDsInOrder 从Redis中获取排序后的帖子ID列表
-func GetPostIDsInOrder(ctx context.Context, p *models.ParamPostList) (res []string, err error) {
-	targetKey, err := genPostKey(ctx, p.CommunityID, p.SortBy)
+func GetPostIDsInOrder(ctx context.Context, p *models.ParamPostList, offset, limit int) (res []string, err error) {
+	if limit <= 0 {
+		return []string{}, nil
+	}
+
+	targetKey, cleanup, err := getPostQueryKey(ctx, p.CommunityID, p.SortBy)
 	if err != nil {
 		return nil, err
 	}
+	defer cleanup()
 
 	if p.SortBy == models.SortFieldCreateTime && (p.StartTime != nil || p.EndTime != nil) {
-		// 场景1：按时间排序 且 有时间范围限制 -> 使用 ZRangeByScore
 		minTime, maxTime := "-inf", "+inf"
 		if p.StartTime != nil {
 			minTime = strconv.FormatInt(*p.StartTime, 10)
@@ -56,58 +60,54 @@ func GetPostIDsInOrder(ctx context.Context, p *models.ParamPostList) (res []stri
 		opt := &redis.ZRangeBy{
 			Min:    minTime,
 			Max:    maxTime,
-			Offset: int64((p.Page - 1) * p.Size),
-			Count:  int64(p.Size),
+			Offset: int64(offset),
+			Count:  int64(limit),
 		}
 
 		if p.Order == models.SortDirectionDesc {
-			res, err = client.ZRevRangeByScore(ctx, targetKey, opt).Result()
-		} else {
-			res, err = client.ZRangeByScore(ctx, targetKey, opt).Result()
+			return client.ZRevRangeByScore(ctx, targetKey, opt).Result()
 		}
-	} else {
-		// 场景 2: 普通翻页 (无时间范围，纯按排名) -> 使用 ZRange
-		start := int64((p.Page - 1) * p.Size)
-		stop := int64(p.Page*p.Size - 1)
-
-		if p.Order == models.SortDirectionDesc {
-			res, err = client.ZRevRange(ctx, targetKey, start, stop).Result()
-		} else {
-			res, err = client.ZRange(ctx, targetKey, start, stop).Result()
-		}
+		return client.ZRangeByScore(ctx, targetKey, opt).Result()
 	}
 
-	return res, err
+	start := int64(offset)
+	stop := int64(offset + limit - 1)
+	if p.Order == models.SortDirectionDesc {
+		return client.ZRevRange(ctx, targetKey, start, stop).Result()
+	}
+	return client.ZRange(ctx, targetKey, start, stop).Result()
 }
 
-// genPostKey 确定基础 key 以及是否需要聚合计算
-func genPostKey(ctx context.Context, commID int64, sortBy models.SortField) (targetKey string, err error) {
+func getPostQueryKey(ctx context.Context, commID int64, sortBy models.SortField) (targetKey string, cleanup func(), err error) {
 	baseKey := getRedisKey(KeyPostScoreZset)
 	if sortBy == models.SortFieldCreateTime {
 		baseKey = getRedisKey(KeyPostTimeZset)
 	}
 
+	cleanup = func() {}
 	targetKey = baseKey
-	if commID > 0 {
-		communityKey := getRedisKey(KeyCommunitySetPF + strconv.Itoa(int(commID)))
-
-		tempKey := fmt.Sprintf("temp:post:%d:%d", commID, time.Now().UnixNano())
-		defer client.Del(ctx, tempKey)
-
-		// AGGREGATE MAX:
-		// 社区 Set 里的分数通常是 0 或无关紧要。
-		// ZSet 里的分数是时间戳或热度。
-		// 取 MAX 或 SUM 都能保留原 ZSet 的分数特性（前提是 Set 里分数不干扰）。
-		err = client.ZInterStore(ctx, tempKey, &redis.ZStore{
-			Keys:      []string{baseKey, communityKey},
-			Weights:   []float64{1, 0}, // 权重: ZSet=1, CommunitySet=0 (忽略社区Set原本的分数)
-			Aggregate: "MAX",
-		}).Err()
-		if err != nil {
-			return "", err
-		}
-		targetKey = tempKey
+	if commID <= 0 {
+		return targetKey, cleanup, nil
 	}
 
-	return targetKey, nil
+	communityKey := getRedisKey(KeyCommunitySetPF + strconv.FormatInt(commID, 10))
+	tempKey := getRedisKey(fmt.Sprintf("temp:post:%d:%d:%s", commID, time.Now().UnixNano(), sortBy))
+	cleanup = func() {
+		_ = client.Del(context.Background(), tempKey).Err()
+	}
+
+	// AGGREGATE MAX:
+	// 社区 Set 里的分数通常是 0 或无关紧要。
+	// ZSet 里的分数是时间戳或热度。
+	// 取 MAX 或 SUM 都能保留原 ZSet 的分数特性（前提是 Set 里分数不干扰）。
+	err = client.ZInterStore(ctx, tempKey, &redis.ZStore{
+		Keys:      []string{baseKey, communityKey},
+		Weights:   []float64{1, 0}, // 权重: ZSet=1, CommunitySet=0 (忽略社区Set原本的分数)
+		Aggregate: "MAX",
+	}).Err()
+	if err != nil {
+		return "", cleanup, err
+	}
+
+	return tempKey, cleanup, nil
 }
