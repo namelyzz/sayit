@@ -12,37 +12,52 @@ import (
 	"go.uber.org/zap"
 )
 
+// SignupHandler 用户注册接口
+// 路由: POST /api/v1/signup
+// 请求体: JSON { "username": "xxx", "password": "xxx", "re_password": "xxx" }
+// 流程: 参数校验 -> 调用 service.SignUp -> 返回结果
 func SignupHandler(c *gin.Context) {
+	// 1. 绑定并校验 JSON 请求参数（通过 binding tag 进行参数验证）
 	p := new(models.ParamSignUp)
 	if err := c.ShouldBindJSON(p); err != nil {
 		zap.L().Error("SignUp with invalid param", zap.Error(err))
+		// 将验证错误转换为用户友好的中文提示
 		handleBindError(c, err)
 		return
 	}
 
+	// 2. 调用 service 层执行注册逻辑
 	if err := service.SignUp(p); err != nil {
+		// 用户名已存在的业务错误，返回特定提示
 		if errors.Is(err, api.ErrorUserExist) {
 			api.ResponseErrorWithMsg(c, api.CodeUserExist, "用户名已存在")
 			return
 		}
-
+		// 其他未知错误统一返回服务器繁忙
 		api.ResponseError(c, api.CodeServerBusy)
 		return
 	}
 
+	// 3. 注册成功，返回空数据（客户端根据 code 判断成功）
 	api.ResponseSuccess(c, nil)
 }
 
+// LoginHandler 用户登录接口
+// 路由: POST /api/v1/login
+// 请求体: JSON { "username": "xxx", "password": "xxx" }
+// 流程: 参数校验 -> 调用 service.Login -> 返回 user_id + user_name + JWT token
 func LoginHandler(c *gin.Context) {
+	// 1. 绑定并校验 JSON 请求参数
 	p := new(models.ParamLogin)
 	if err := c.ShouldBindJSON(p); err != nil {
 		zap.L().Error("Login with invalid param", zap.Error(err))
+		// 判断是否为验证器错误，如果不是则返回通用参数错误
 		errs, ok := err.(validator.ValidationErrors)
 		if !ok {
 			api.ResponseError(c, api.CodeInvalidParam)
 			return
 		}
-
+		// 将验证器错误中的结构体前缀去除，生成更友好的错误信息
 		api.ResponseErrorWithMsg(
 			c,
 			api.CodeInvalidParam,
@@ -51,22 +66,27 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
+	// 2. 调用 service 层执行登录逻辑，返回用户信息（含 JWT token）
 	user, err := service.Login(p)
 	if err != nil {
 		zap.L().Error("login failed", zap.String("username", p.Username), zap.Error(err))
+		// 用户不存在
 		if errors.Is(err, api.ErrorUserNotExist) {
 			api.ResponseError(c, api.CodeUserNotExist)
 			return
 		}
+		// 密码错误
 		if errors.Is(err, api.ErrorInvalidLogin) {
 			api.ResponseError(c, api.CodeInvalidPassword)
 			return
 		}
-
+		// 其他未知错误
 		api.ResponseError(c, api.CodeServerBusy)
 		return
 	}
 
+	// 3. 登录成功，返回用户ID、用户名和JWT令牌
+	// UserID 转为字符串返回，避免前端 JSON 精度丢失问题
 	api.ResponseSuccess(c, gin.H{
 		"user_id":   fmt.Sprintf("%d", user.UserID),
 		"user_name": user.Username,

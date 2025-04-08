@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// CreatePost 将帖子记录插入 MySQL post 表
+// 使用 Omit("UpdateTime") 排除 UpdateTime 字段，让数据库使用默认值
+// 注意: 此方法是独立的单表写入，CreatePostWithOutbox 才是带事务的完整写入
 func CreatePost(p *models.Post) (err error) {
 	res := db.Omit("UpdateTime").Create(p)
 	if res.Error != nil {
@@ -20,6 +23,8 @@ func CreatePost(p *models.Post) (err error) {
 	return nil
 }
 
+// GetPostByID 根据帖子ID查询单个帖子的完整信息
+// 用于帖子详情接口，返回帖子的所有字段（不含作者名和社区名）
 func GetPostByID(postID int64) (post *models.Post, err error) {
 	post = new(models.Post)
 	res := db.Model(&models.Post{}).
@@ -32,11 +37,18 @@ func GetPostByID(postID int64) (post *models.Post, err error) {
 	return post, nil
 }
 
+// 帖子列表查询的常量配置
 const (
-	PostSummaryLength = 30    // 帖子摘要长度
-	PostSummarySuffix = "..." // 帖子摘要细节
+	PostSummaryLength = 30    // 内容摘要截取长度（字符数）
+	PostSummarySuffix = "..." // 摘要超长时的后缀
 )
 
+// postListSelect 帖子列表查询的 SELECT 子句
+// 使用 SQL 函数动态生成内容摘要:
+//   - CHAR_LENGTH(p.content) > 30: 判断内容是否超长
+//   - SUBSTRING(p.content, 1, 30): 截取前30个字符
+//   - CONCAT(..., '...'): 拼接后缀
+// 同时 JOIN users 和 community 表获取作者名和社区名
 const postListSelect = `p.post_id, p.title, p.author_id, p.community_id, p.status,
 	p.create_time, p.update_time, u.username AS user_name, c.community_name,
 	CASE
@@ -44,16 +56,24 @@ const postListSelect = `p.post_id, p.title, p.author_id, p.community_id, p.statu
 		ELSE p.content
 	END AS summary`
 
+// GetPostList 帖子列表查询（纯 MySQL 路径）
+// 适用于: update_time 排序、有作者名/关键词过滤、或 Redis 异常时的 fallback
+// 查询流程: 构建基础查询 -> 应用过滤条件 -> 应用排序 -> 应用分页
 func GetPostList(p *models.ParamPostList) (posts []*models.PostListItem, err error) {
+	// 1. 构建基础查询（三表 JOIN）
 	query := buildPostListQuery()
+	// 2. 应用过滤条件（社区、作者、关键词、时间范围、状态）
 	query = applyPostListFilters(query, p)
+	// 3. 应用排序（create_time 或 update_time，asc 或 desc）
 	query = applySorting(query, p)
 
+	// 4. 应用分页
 	if p.Page > 0 && p.Size > 0 {
 		offset := (p.Page - 1) * p.Size
 		query = query.Offset(offset).Limit(p.Size)
 	}
 
+	// 5. 执行查询
 	var items []*models.PostListItem
 	if err = query.Scan(&items).Error; err != nil {
 		zap.L().Error("get post list failed",
@@ -65,12 +85,20 @@ func GetPostList(p *models.ParamPostList) (posts []*models.PostListItem, err err
 	return items, nil
 }
 
+// FilterPostListByIDs 根据帖子 ID 列表查询帖子信息（带过滤条件）
+// 使用场景: Redis 返回帖子 ID 后，回查 MySQL 获取完整帖子信息
+// 特点:
+//   - 使用 WHERE IN 查询指定 ID 的帖子
+//   - 仍会应用过滤条件（status 等）
+//   - 结果会按照传入的 postIDs 顺序重新排序（保持 Redis 的排序）
 func FilterPostListByIDs(postIDs []int64, p *models.ParamPostList) (posts []*models.PostListItem, err error) {
 	if len(postIDs) == 0 {
 		return []*models.PostListItem{}, nil
 	}
 
+	// 构建查询: 基础三表 JOIN + WHERE IN 指定帖子ID
 	query := buildPostListQuery().Where("p.post_id IN ?", postIDs)
+	// 应用过滤条件（可能过滤掉部分帖子）
 	query = applyPostListFilters(query, p)
 
 	var items []*models.PostListItem
@@ -82,13 +110,18 @@ func FilterPostListByIDs(postIDs []int64, p *models.ParamPostList) (posts []*mod
 		return nil, err
 	}
 
+	// 保持 Redis 返回的排序顺序（MySQL 查询后顺序可能改变）
 	return reorderPostListItems(postIDs, items), nil
 }
 
+// GetPostListByIDs 根据帖子 ID 列表查询帖子信息（无过滤条件）
 func GetPostListByIDs(postIDs []int64) (posts []*models.PostListItem, err error) {
 	return FilterPostListByIDs(postIDs, nil)
 }
 
+// buildPostListQuery 构建帖子列表的基础查询
+// 三表 JOIN: post + users + community
+// 同时通过 SQL 函数生成内容摘要
 func buildPostListQuery() *gorm.DB {
 	return db.Table("post p").
 		Select(postListSelect, PostSummaryLength, PostSummaryLength, PostSummarySuffix).
@@ -96,6 +129,13 @@ func buildPostListQuery() *gorm.DB {
 		Joins("LEFT JOIN community c ON p.community_id = c.community_id")
 }
 
+// applyPostListFilters 应用帖子列表的过滤条件
+// 支持的过滤条件:
+//   - CommunityID: 精确匹配社区ID
+//   - UserName: 作者名模糊搜索（LIKE %keyword%）
+//   - Keyword: 标题模糊搜索（LIKE %keyword%）
+//   - StartTime/EndTime: 创建时间范围筛选
+//   - Status: 帖子状态精确匹配
 func applyPostListFilters(query *gorm.DB, p *models.ParamPostList) *gorm.DB {
 	if p == nil {
 		return query
@@ -123,6 +163,9 @@ func applyPostListFilters(query *gorm.DB, p *models.ParamPostList) *gorm.DB {
 	return query
 }
 
+// applySorting 应用排序规则
+// 支持的排序字段: create_time, update_time（score 排序走 Redis 路径）
+// 支持的排序方向: asc, desc
 func applySorting(query *gorm.DB, p *models.ParamPostList) *gorm.DB {
 	orderBy := "p.create_time"
 	switch p.SortBy {
@@ -142,6 +185,9 @@ func applySorting(query *gorm.DB, p *models.ParamPostList) *gorm.DB {
 	return query.Order(orderBy + " " + order)
 }
 
+// reorderPostListItems 按照 Redis 返回的 ID 顺序重新排列 MySQL 查询结果
+// 原因: MySQL WHERE IN 查询返回的结果顺序不确定，需要保持 Redis 的排序
+// 算法: 先建立 ID->Item 的映射，再按 postIDs 顺序提取
 func reorderPostListItems(postIDs []int64, items []*models.PostListItem) []*models.PostListItem {
 	itemByID := make(map[int64]*models.PostListItem, len(items))
 	for _, item := range items {

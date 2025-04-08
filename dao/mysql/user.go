@@ -7,6 +7,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// CheckUserExist 检查用户名是否已存在
+// 通过查询数据库中该用户名的记录数来判断
+// 返回 nil 表示用户名可用，返回 api.ErrorUserExist 表示已存在
 func CheckUserExist(username string) (err error) {
 	var count int64
 	if err = db.Model(&models.User{}).Where("username = ?", username).Count(&count).Error; err != nil {
@@ -19,34 +22,43 @@ func CheckUserExist(username string) (err error) {
 	return nil
 }
 
+// InsertUser 将新用户插入数据库
+// 在插入前对密码进行 SHA256 加盐哈希，数据库中只存储哈希值
 func InsertUser(user *models.User) (err error) {
+	// 对明文密码进行哈希加密后替换，确保数据库中不存储明文密码
 	user.Password = security.HashPassword(user.Password)
 	res := db.Create(user)
 	return res.Error
 }
 
+// Login 验证用户登录
+// 流程: 根据用户名查询用户 -> 用暂存的明文密码与数据库中的哈希密码比对
+// 注意: 此方法会修改传入的 user 对象，将数据库中的用户信息覆盖到 user 中
 func Login(user *models.User) (err error) {
-	// 这是用户输入时的密码，暂存起来
+	// 暂存用户输入的明文密码，因为后续查询会覆盖 user.Password
 	userPwd := user.Password
 
-	// 这一步会取出 DB 中的用户信息，将覆盖掉用户输入的数据，此时密码是经过加密的
+	// 根据用户名查询数据库，查询结果（含哈希密码）会覆盖 user 对象的字段
 	err = db.Where("username = ?", user.Username).First(user).Error
 	if err == gorm.ErrRecordNotFound {
+		// 用户名不存在
 		return api.ErrorUserNotExist
 	}
 	if err != nil {
 		return err
 	}
 
-	// 与暂存的密码进行比对，看是否一致
+	// 将用户输入的明文密码与数据库中的哈希密码进行比对
 	if !security.VerifyPassword(userPwd, user.Password) {
-		// 密码错误
+		// 密码不匹配
 		return api.ErrorInvalidLogin
 	}
 
 	return nil
 }
 
+// GetUserByID 根据用户ID查询用户信息（仅返回 user_id 和 username，不返回密码）
+// 用于其他模块获取用户公开信息
 func GetUserByID(userID int64) (user *models.User, err error) {
 	user = new(models.User)
 	res := db.Model(&models.User{}).
