@@ -189,14 +189,14 @@ func applySorting(query *gorm.DB, p *models.ParamPostList) *gorm.DB {
 // 原因: MySQL WHERE IN 查询返回的结果顺序不确定，需要保持 Redis 的排序
 // 算法: 先建立 ID->Item 的映射，再按 postIDs 顺序提取
 func reorderPostListItems(postIDs []int64, items []*models.PostListItem) []*models.PostListItem {
-	itemByID := make(map[int64]*models.PostListItem, len(items))
+	itemByID := make(map[models.SnowflakeID]*models.PostListItem, len(items))
 	for _, item := range items {
 		itemByID[item.PostID] = item
 	}
 
 	ordered := make([]*models.PostListItem, 0, len(items))
 	for _, postID := range postIDs {
-		if item, ok := itemByID[postID]; ok {
+		if item, ok := itemByID[models.SnowflakeID(postID)]; ok {
 			ordered = append(ordered, item)
 		}
 	}

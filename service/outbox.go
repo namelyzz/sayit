@@ -135,7 +135,7 @@ func outboxRetryDelay(retryCount int) time.Duration {
 // payload 包含写入 Redis 所需的信息: postID、communityID、createTimeUnix
 func newPostCreatedOutboxEvent(p *models.Post) (*models.OutboxEvent, error) {
 	payload := models.PostCreatedPayload{
-		PostID:         p.PostID,
+		PostID:         int64(p.PostID),
 		CommunityID:    p.CommunityID,
 		CreateTimeUnix: p.CreateTime.Unix(),
 	}
@@ -146,7 +146,7 @@ func newPostCreatedOutboxEvent(p *models.Post) (*models.OutboxEvent, error) {
 
 	return &models.OutboxEvent{
 		EventType:   models.EventTypePostCreated,
-		AggregateID: p.PostID,
+		AggregateID: int64(p.PostID),
 		Payload:     payloadBytes,
 		NextRetryAt: nowFunc(), // 立即可重试（用于同步处理尝试）
 	}, nil

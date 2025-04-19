@@ -19,9 +19,9 @@ func SignUp(p *models.ParamSignUp) (err error) {
 	// 雪花ID相比自增ID的优势: 全局唯一、趋势递增、不暴露用户数量、支持分布式
 	userID := snowflake.GenID()
 	user := &models.User{
-		UserID:   userID,
+		UserID:   models.SnowflakeID(userID),
 		Username: p.Username,
-		Password: p.Password, // 明文密码，InsertUser 中会进行加密
+		Password: p.Password,
 	}
 
 	// 3. 入库（dao 层会对密码进行 SHA256 加密后存储）
@@ -38,7 +38,7 @@ func Login(p *models.ParamLogin) (user *models.User, err error) {
 	}
 
 	// 2. 密码验证通过，生成 JWT Token（有效期1小时）
-	token, err := jwt.CreateJWTToken(user.UserID, user.Username)
+	token, err := jwt.CreateJWTToken(int64(user.UserID), user.Username)
 	if err != nil {
 		return nil, err
 	}

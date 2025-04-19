@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/namelyzz/sayit/middlewares"
@@ -86,10 +85,5 @@ func LoginHandler(c *gin.Context) {
 	}
 
 	// 3. 登录成功，返回用户ID、用户名和JWT令牌
-	// UserID 转为字符串返回，避免前端 JSON 精度丢失问题
-	api.ResponseSuccess(c, gin.H{
-		"user_id":   fmt.Sprintf("%d", user.UserID),
-		"user_name": user.Username,
-		"token":     user.Token,
-	})
+	api.ResponseSuccess(c, user)
 }

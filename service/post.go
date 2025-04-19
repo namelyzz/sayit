@@ -27,7 +27,7 @@ var (
 // 优点: 即使 Redis 暂时不可用，帖子数据也不会丢失，会由后台任务补偿
 func CreatePost(ctx context.Context, p *models.Post) (err error) {
 	// 1. 通过雪花算法生成全局唯一帖子 ID
-	p.PostID = genIDFunc()
+	p.PostID = models.SnowflakeID(genIDFunc())
 	now := nowFunc()
 
 	// 2. 设置帖子创建时间
@@ -52,7 +52,7 @@ func CreatePost(ctx context.Context, p *models.Post) (err error) {
 	if err = processOutboxEvent(ctx, event); err != nil {
 		zap.L().Warn("sync post created outbox event failed, will retry",
 			zap.Int64("eventID", event.ID),
-			zap.Int64("postID", p.PostID),
+			zap.Int64("postID", int64(p.PostID)),
 			zap.Error(err))
 	}
 

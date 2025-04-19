@@ -9,7 +9,7 @@ import (
 
 func SetupRouter(mode string) *gin.Engine {
 	r := gin.New()
-	r.Use(middlewares.GinLogger(), middlewares.GinRecovery(true))
+	r.Use(middlewares.GinLogger(), middlewares.GinRecovery(true), middlewares.Cors())
 
 	v1 := r.Group("/api/v1")
 
