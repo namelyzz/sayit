@@ -3,12 +3,15 @@
 import { useState, useEffect } from "react";
 import PostCard from "@/components/ui/PostCard";
 import { apiClient } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import Link from "next/link";
 
 interface Post {
   post_id: string;
   title: string;
   summary: string;
   user_name: string;
+  community_id: string;
   community_name: string;
   create_time: string;
   like_count: number;
@@ -16,14 +19,18 @@ interface Post {
 }
 
 export default function Home() {
+  const { user, loading: authLoading } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"create_time" | "score">("create_time");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState("");
+  const [needLogin, setNeedLogin] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
+
     const fetchPosts = async () => {
       setLoading(true);
       try {
@@ -37,17 +44,23 @@ export default function Home() {
         const totalData = Array.isArray(response.data) ? response.data.length : (response.data?.total ?? 0);
         setPosts(postsData);
         setTotal(totalData);
-      } catch (error) {
+        setNeedLogin(false);
+      } catch (error: any) {
         console.error("Failed to fetch posts:", error);
-        setError("加载帖子失败，请检查后端服务是否已启动");
-        setPosts([]);
+        if (!user) {
+          setNeedLogin(true);
+          setPosts([]);
+        } else {
+          setError("加载帖子失败，请检查后端服务是否已启动");
+          setPosts([]);
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchPosts();
-  }, [sortBy, page]);
+  }, [sortBy, page, user, authLoading]);
 
   return (
     <div>
@@ -85,6 +98,17 @@ export default function Home() {
             <span className="block sm:inline">{error}</span>
           </div>
         )}
+        {needLogin && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+            <p className="text-gray-600 mb-4">登录后查看帖子内容</p>
+            <Link
+              href="/login"
+              className="inline-block px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              去登录
+            </Link>
+          </div>
+        )}
         {loading ? (
           [...Array(5)].map((_, i) => (
             <div
@@ -104,7 +128,7 @@ export default function Home() {
           ))
         ) : posts && posts.length > 0 ? (
           posts.map((post) => <PostCard key={post.post_id} post={post} />)
-        ) : (
+        ) : !needLogin && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
             <p className="text-gray-500">暂无帖子</p>
           </div>

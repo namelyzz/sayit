@@ -9,6 +9,7 @@ interface PostCardProps {
     title: string;
     summary: string;
     user_name: string;
+    community_id: string;
     community_name: string;
     create_time: string;
     like_count: number;
@@ -38,7 +39,7 @@ export default function PostCard({ post }: PostCardProps) {
           {/* Meta Info */}
           <div className="flex items-center text-sm text-gray-500 mb-2">
             <Link
-              href={`/community/${post.community_name}`}
+              href={`/community/${post.community_id}`}
               className="font-medium text-primary hover:underline"
             >
               {post.community_name}
