@@ -2,43 +2,32 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Home, Users, Star } from "lucide-react";
+import { Home, TrendingUp, Shuffle } from "lucide-react";
 import { apiClient } from "@/lib/api";
 
-interface Community {
+interface HotCommunity {
   community_id: string;
-  name: string;
+  community_name: string;
 }
 
 export default function Sidebar() {
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [hotCommunities, setHotCommunities] = useState<HotCommunity[]>([]);
+  const [hotLoading, setHotLoading] = useState(true);
 
   useEffect(() => {
-    const fetchCommunities = async () => {
+    const fetchHotCommunities = async () => {
       try {
-        const response = await apiClient.getCommunities();
-        setCommunities(response.data ?? []);
+        const response = await apiClient.getHotCommunities(5);
+        setHotCommunities(response.data ?? []);
       } catch (error) {
-        console.error("Failed to fetch communities:", error);
-        setCommunities([
-          { community_id: "1", name: "GolangStudy" },
-          { community_id: "2", name: "KamenRiderFaiz" },
-          { community_id: "3", name: "A_Stock" },
-          { community_id: "4", name: "EnglishSpeaking" },
-          { community_id: "5", name: "WoodworkingDIY" },
-          { community_id: "6", name: "AnimeLovers" },
-          { community_id: "7", name: "HomeCook" },
-          { community_id: "8", name: "FitnessBeginner" },
-          { community_id: "9", name: "DigitalNomad" },
-          { community_id: "10", name: "PlantParents" },
-        ]);
+        console.error("Failed to fetch hot communities:", error);
+        setHotCommunities([]);
       } finally {
-        setLoading(false);
+        setHotLoading(false);
       }
     };
 
-    fetchCommunities();
+    fetchHotCommunities();
   }, []);
 
   return (
@@ -58,59 +47,53 @@ export default function Sidebar() {
         {/* Divider */}
         <div className="border-t border-gray-200 my-4"></div>
 
-        {/* Communities Section */}
+        {/* Hot Communities Section */}
         <div>
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            社区
+            热门社区
           </h3>
-          
-          {loading ? (
+          {hotLoading ? (
             <div className="space-y-2">
-              {[...Array(5)].map((_, i) => (
+              {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
                   className="h-10 bg-gray-100 rounded-lg animate-pulse"
                 ></div>
               ))}
             </div>
-          ) : (
+          ) : hotCommunities.length > 0 ? (
             <div className="space-y-1">
-              {communities.map((community) => (
+              {hotCommunities.map((community) => (
                 <Link
                   key={community.community_id}
                   href={`/community/${community.community_id}`}
                   className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                 >
-                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                    <Users className="h-4 w-4 text-white" />
-                  </div>
+                  <TrendingUp className="h-4 w-4 text-accent" />
                   <span className="text-sm font-medium">
-                    {community.name}
+                    {community.community_name}
                   </span>
                 </Link>
               ))}
             </div>
+          ) : (
+            <p className="text-sm text-gray-400 py-2">暂无热门社区</p>
           )}
         </div>
 
-        {/* Popular Communities */}
+        {/* Random Recommended Communities (Placeholder) */}
         <div className="border-t border-gray-200 my-4 pt-4">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            热门社区
+            随机推荐
           </h3>
           <div className="space-y-1">
-            {communities.slice(0, 5).map((community) => (
-              <Link
-                key={community.community_id}
-                href={`/community/${community.community_id}`}
-                className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <Star className="h-4 w-4 text-accent" />
-                <span className="text-sm">
-                  {community.name}
-                </span>
-              </Link>
-            ))}
+            <Link
+              href="#"
+              className="flex items-center space-x-3 px-3 py-2 text-gray-400 hover:bg-gray-50 rounded-lg transition-colors cursor-not-allowed"
+            >
+              <Shuffle className="h-4 w-4 text-gray-300" />
+              <span className="text-sm">敬请期待</span>
+            </Link>
           </div>
         </div>
       </div>

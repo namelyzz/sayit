@@ -21,3 +21,11 @@ type CommunityDetail struct {
 func (CommunityDetail) TableName() string {
 	return "community"
 }
+
+// HotCommunity 热门社区（用于接口返回）
+type HotCommunity struct {
+	ID        SnowflakeID `json:"community_id"`
+	Name      string      `json:"community_name"`
+	HotScore  float64     `json:"hot_score"` // 热度分数
+	PostCount int64       `json:"post_count"`
+}

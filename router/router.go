@@ -13,6 +13,9 @@ func SetupRouter(mode string) *gin.Engine {
 
 	v1 := r.Group("/api/v1")
 
+	// 公开接口（无需 JWT 验证）
+	v1.GET("/hot_communities", controller.HotCommunityHandler) // 热门社区列表
+
 	// 用户模块
 	v1.POST("/signup", controller.SignupHandler) // 注册
 	v1.POST("/login", controller.LoginHandler)   // 登录

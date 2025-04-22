@@ -34,3 +34,25 @@ func CommunityDetailHandler(c *gin.Context) {
 	}
 	api.ResponseSuccess(c, data)
 }
+
+func HotCommunityHandler(c *gin.Context) {
+	limitStr := c.DefaultQuery("limit", "10")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		zap.L().Warn("invalid limit parameter, use default",
+			zap.String("limit", limitStr), zap.Error(err))
+		limit = 10
+	} else if limit <= 0 {
+		zap.L().Warn("limit must be positive, use default",
+			zap.String("limit", limitStr), zap.Int("parsed", limit))
+		limit = 10
+	}
+
+	data, err := service.GetHotCommunityList(limit)
+	if err != nil {
+		zap.L().Error("service.GetHotCommunityList() failed", zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+	api.ResponseSuccess(c, data)
+}
