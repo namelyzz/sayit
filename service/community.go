@@ -15,6 +15,10 @@ func GetCommunityDetailByID(id int64) (*models.CommunityDetail, error) {
 	return mysql.GetCommunityDetailByID(id)
 }
 
+func GetRandomCommunityList(limit int) ([]*models.Community, error) {
+	return mysql.GetRandomCommunityList(limit)
+}
+
 // GetHotCommunityList 从 Redis 计算热门社区列表
 // 流程: 1) MySQL 获取所有社区ID和名称  2) Redis 聚合每个社区的热度分数  3) 合并返回
 func GetHotCommunityList(limit int) ([]*models.HotCommunity, error) {

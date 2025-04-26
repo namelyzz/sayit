@@ -44,6 +44,31 @@ func GetCommunityDetailByID(id int64) (detail *models.CommunityDetail, err error
 	return detail, nil
 }
 
+// GetRandomCommunityList 随机获取指定数量的社区
+// 使用 ORDER BY RAND() 实现随机抽样，适用于社区数量中等的场景
+func GetRandomCommunityList(limit int) ([]*models.Community, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	communities := make([]*models.Community, 0, limit)
+	res := db.Model(&models.Community{}).
+		Select("community_id", "community_name").
+		Order("RAND()").
+		Limit(limit).
+		Find(&communities)
+
+	if res.Error != nil {
+		zap.L().Error("get random community list failed", zap.Error(res.Error))
+		return nil, res.Error
+	}
+
+	return communities, nil
+}
+
 // GetHotCommunityList 获取热门社区列表
 //
 // 热度算法: 加权时间衰减 (Weighted Time Decay)，纯 MySQL 实现，不依赖 Redis

@@ -10,9 +10,16 @@ interface HotCommunity {
   community_name: string;
 }
 
+interface RandomCommunity {
+  community_id: string;
+  name: string;
+}
+
 export default function Sidebar() {
   const [hotCommunities, setHotCommunities] = useState<HotCommunity[]>([]);
+  const [randomCommunities, setRandomCommunities] = useState<RandomCommunity[]>([]);
   const [hotLoading, setHotLoading] = useState(true);
+  const [randomLoading, setRandomLoading] = useState(true);
 
   useEffect(() => {
     const fetchHotCommunities = async () => {
@@ -28,6 +35,24 @@ export default function Sidebar() {
     };
 
     fetchHotCommunities();
+  }, []);
+
+  const fetchRandomCommunities = async () => {
+    setRandomLoading(true);
+    try {
+      const response = await apiClient.getRandomCommunities(5);
+      setRandomCommunities(response.data ?? []);
+    } catch (error) {
+      console.error("Failed to fetch random communities:", error);
+      setRandomCommunities([]);
+    } finally {
+      setRandomLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRandomCommunities();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -81,20 +106,49 @@ export default function Sidebar() {
           )}
         </div>
 
-        {/* Random Recommended Communities (Placeholder) */}
+        {/* Random Recommended Communities */}
         <div className="border-t border-gray-200 my-4 pt-4">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            随机推荐
-          </h3>
-          <div className="space-y-1">
-            <Link
-              href="#"
-              className="flex items-center space-x-3 px-3 py-2 text-gray-400 hover:bg-gray-50 rounded-lg transition-colors cursor-not-allowed"
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              随机推荐
+            </h3>
+            <button
+              onClick={fetchRandomCommunities}
+              disabled={randomLoading}
+              className="text-xs text-primary hover:text-primary/80 disabled:opacity-50 flex items-center gap-1 transition-colors"
+              title="刷新推荐"
             >
-              <Shuffle className="h-4 w-4 text-gray-300" />
-              <span className="text-sm">敬请期待</span>
-            </Link>
+              <Shuffle className={`h-3 w-3 ${randomLoading ? "animate-spin" : ""}`} />
+              刷新
+            </button>
           </div>
+          {randomLoading ? (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-10 bg-gray-100 rounded-lg animate-pulse"
+                ></div>
+              ))}
+            </div>
+          ) : randomCommunities.length > 0 ? (
+            <div className="space-y-1">
+              {randomCommunities.map((community) => (
+                <Link
+                  key={community.community_id}
+                  href={`/community/${community.community_id}`}
+                  className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <Shuffle className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm font-medium">
+                    {community.name}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 py-2">暂无推荐社区</p>
+          )}
         </div>
       </div>
     </aside>

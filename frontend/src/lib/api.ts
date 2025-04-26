@@ -98,9 +98,12 @@ class ApiClient {
     return this.request<Array<{
       community_id: string;
       community_name: string;
-      hot_score: number;
-      post_count: number;
     }>>(`/hot_communities${query}`);
+  }
+
+  async getRandomCommunities(limit?: number) {
+    const query = limit ? `?limit=${limit}` : "";
+    return this.request<Array<{ community_id: string; name: string }>>(`/random_communities${query}`);
   }
 
   async getCommunityDetail(id: string) {
