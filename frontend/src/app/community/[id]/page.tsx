@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import PostCard from "@/components/ui/PostCard";
 import { apiClient } from "@/lib/api";
-import { Users, Calendar } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { Users, Calendar, Heart } from "lucide-react";
 
 interface Community {
   community_id: string;
@@ -28,13 +29,18 @@ interface Post {
 export default function CommunityPage() {
   const params = useParams();
   const communityId = params.id as string;
-  
+  const { user, loading: authLoading } = useAuth();
+
   const [community, setCommunity] = useState<Community | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [isFollowed, setIsFollowed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [followLoading, setFollowLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (authLoading) return;
+
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -42,20 +48,66 @@ export default function CommunityPage() {
           apiClient.getCommunityDetail(communityId),
           apiClient.getPosts({ community_id: communityId, size: 20 }),
         ]);
-        
+
         setCommunity(communityResponse.data);
         const postsData = Array.isArray(postsResponse.data) ? postsResponse.data : (postsResponse.data?.list ?? []);
         setPosts(postsData);
-      } catch (error) {
+
+        // 检查关注状态（仅登录用户）
+        if (user) {
+          try {
+            const followResponse = await apiClient.isFollowedCommunity(communityId);
+            setIsFollowed(followResponse.data?.is_followed ?? false);
+          } catch {
+            setIsFollowed(false);
+          }
+        }
+      } catch (error: any) {
         console.error("Failed to fetch community data:", error);
-        setError("加载社区数据失败，请检查后端服务是否已启动");
+        const msg = error?.message || "";
+        if (msg.includes("token") || msg.includes("登录")) {
+          setError("登录后查看完整内容");
+        } else {
+          setError("加载社区数据失败，请检查后端服务是否已启动");
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [communityId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [communityId, authLoading]);
+
+  const handleFollowToggle = async () => {
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
+
+    setFollowLoading(true);
+    try {
+      if (isFollowed) {
+        await apiClient.unfollowCommunity(communityId);
+        setIsFollowed(false);
+      } else {
+        await apiClient.followCommunity(communityId);
+        setIsFollowed(true);
+      }
+      // 通知左侧栏刷新已关注社区列表
+      window.dispatchEvent(new CustomEvent("follow-refresh"));
+    } catch (error: any) {
+      console.error("Follow toggle failed:", error);
+      // Token 无效时 apiClient 会自动清除，这里提示用户
+      if (error?.message?.includes("token") || error?.message?.includes("登录")) {
+        window.location.href = "/login";
+      } else {
+        alert("操作失败，请重试");
+      }
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -77,11 +129,29 @@ export default function CommunityPage() {
     );
   }
 
-  if (error || !community) {
+  if (error && !community) {
     return (
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-          <p className="text-gray-500">{error || "社区不存在"}</p>
+          <p className="text-gray-500">{error}</p>
+          {!user && (
+            <Link href="/login" className="text-primary hover:underline mt-4 inline-block">
+              去登录
+            </Link>
+          )}
+          <Link href="/" className="text-primary hover:underline mt-4 inline-block ml-4">
+            返回首页
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!community) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+          <p className="text-gray-500">社区不存在</p>
           <Link href="/" className="text-primary hover:underline mt-4 inline-block">
             返回首页
           </Link>
@@ -111,12 +181,43 @@ export default function CommunityPage() {
               </span>
             </div>
           </div>
-          <Link
-            href="/submit"
-            className="bg-primary hover:bg-primary-light text-white px-4 py-2 rounded-lg font-medium transition-colors"
-          >
-            发帖
-          </Link>
+          <div className="flex flex-col items-end space-y-2">
+            {/* Follow Button */}
+            {user && (
+              <button
+                onClick={handleFollowToggle}
+                disabled={followLoading}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium transition-all ${
+                  isFollowed
+                    ? "bg-primary text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                } disabled:opacity-60`}
+              >
+                <Heart
+                  className={`h-4 w-4 ${
+                    isFollowed ? "fill-current" : ""
+                  }`}
+                />
+                <span>{isFollowed ? "已关注" : "关注"}</span>
+              </button>
+            )}
+            {/* Create Post Button */}
+            {user ? (
+              <Link
+                href="/submit"
+                className="bg-primary hover:bg-primary-light text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                发帖
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                登录后发帖
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

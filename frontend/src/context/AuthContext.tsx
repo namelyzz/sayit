@@ -16,7 +16,7 @@ interface AuthContextType {
   logout: () => void;
 }
 
-const AuthContext = createContext< AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function getStorage(remember: boolean) {
   return remember ? localStorage : sessionStorage;
@@ -36,7 +36,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check both localStorage and sessionStorage for existing session
+    // 启动时直接从 localStorage 读取用户信息，不做 API 验证
+    // 信任本地存储，让每个 API 请求自己去验证 token
     const token = localStorage.getItem("token") || sessionStorage.getItem("token");
     const userId = localStorage.getItem("user_id") || sessionStorage.getItem("user_id");
     const userName = localStorage.getItem("user_name") || sessionStorage.getItem("user_name");
@@ -51,12 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (username: string, password: string, rememberMe: boolean = false) => {
     const response = await apiClient.login(username, password);
     const { user_id, user_name, token } = response.data;
-    
+
     const storage = getStorage(rememberMe);
     storage.setItem("token", token);
     storage.setItem("user_id", user_id);
     storage.setItem("user_name", user_name);
-    
+
+    apiClient.setToken(token);
     setUser({ user_id, user_name });
   };
 

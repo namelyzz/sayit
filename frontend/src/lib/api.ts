@@ -52,6 +52,18 @@ class ApiClient {
       const data = await response.json();
 
       if (data.code !== 10000) {
+        // Token 无效/过期时，自动清除本地存储
+        if (data.code === 10012 || data.msg === "无效的token" || data.msg === "token is expired") {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user_id");
+            localStorage.removeItem("user_name");
+            sessionStorage.removeItem("token");
+            sessionStorage.removeItem("user_id");
+            sessionStorage.removeItem("user_name");
+          }
+          this.clearToken();
+        }
         throw new Error(data.msg || "请求失败");
       }
 
@@ -104,6 +116,29 @@ class ApiClient {
   async getRandomCommunities(limit?: number) {
     const query = limit ? `?limit=${limit}` : "";
     return this.request<Array<{ community_id: string; name: string }>>(`/random_communities${query}`);
+  }
+
+  // 关注社区相关
+  async followCommunity(communityId: string) {
+    return this.request("/follow", {
+      method: "POST",
+      body: JSON.stringify({ community_id: communityId }),
+    });
+  }
+
+  async unfollowCommunity(communityId: string) {
+    return this.request("/unfollow", {
+      method: "POST",
+      body: JSON.stringify({ community_id: communityId }),
+    });
+  }
+
+  async isFollowedCommunity(communityId: string): Promise<{ is_followed: boolean }> {
+    return this.request(`/is_followed?community_id=${communityId}`);
+  }
+
+  async getFollowedCommunities() {
+    return this.request<Array<{ community_id: string; name: string }>>("/followed_communities");
   }
 
   async getCommunityDetail(id: string) {

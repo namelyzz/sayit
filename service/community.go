@@ -19,6 +19,22 @@ func GetRandomCommunityList(limit int) ([]*models.Community, error) {
 	return mysql.GetRandomCommunityList(limit)
 }
 
+func FollowCommunity(userID, communityID int64) error {
+	return mysql.FollowCommunity(userID, communityID)
+}
+
+func UnfollowCommunity(userID, communityID int64) error {
+	return mysql.UnfollowCommunity(userID, communityID)
+}
+
+func IsFollowingCommunity(userID, communityID int64) (bool, error) {
+	return mysql.IsFollowingCommunity(userID, communityID)
+}
+
+func GetFollowedCommunityList(userID int64) ([]*models.Community, error) {
+	return mysql.GetFollowedCommunityList(userID)
+}
+
 // GetHotCommunityList 从 Redis 计算热门社区列表
 // 流程: 1) MySQL 获取所有社区ID和名称  2) Redis 聚合每个社区的热度分数  3) 合并返回
 func GetHotCommunityList(limit int) ([]*models.HotCommunity, error) {
@@ -49,9 +65,9 @@ func GetHotCommunityList(limit int) ([]*models.HotCommunity, error) {
 	results := make([]*models.HotCommunity, 0, len(redisResults))
 	for _, r := range redisResults {
 		results = append(results, &models.HotCommunity{
-			ID:       models.SnowflakeID(r.ID),
-			Name:     nameByID[r.ID],
-			HotScore: r.HotScore,
+			ID:        models.SnowflakeID(r.ID),
+			Name:      nameByID[r.ID],
+			HotScore:  r.HotScore,
 			PostCount: int64(r.PostCount),
 		})
 	}
