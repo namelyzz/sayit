@@ -6,6 +6,60 @@ interface ApiResponse<T> {
   data: T;
 }
 
+export interface UserSummary {
+  user_id: string;
+  user_name: string;
+}
+
+export interface CommunitySummary {
+  community_id: string;
+  name: string;
+}
+
+export interface HotCommunity {
+  community_id: string;
+  community_name: string;
+}
+
+export interface CommunityDetail {
+  community_id: string;
+  name: string;
+  introduction: string;
+  create_time: string;
+}
+
+export interface PostListItem {
+  post_id: string;
+  title: string;
+  summary: string;
+  user_name: string;
+  community_id: string;
+  community_name: string;
+  create_time: string;
+  like_count: number;
+  comment_count: number;
+}
+
+export interface PostsResponse {
+  list: PostListItem[];
+  total: number;
+}
+
+export interface PostDetail {
+  post_id: string;
+  title: string;
+  content: string;
+  author_name: string;
+  community: {
+    community_id: string;
+    name: string;
+    introduction: string;
+  };
+  create_time: string;
+  like_count: number;
+  comment_count: number;
+}
+
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
@@ -25,11 +79,21 @@ class ApiClient {
     this.token = null;
   }
 
+  private clearAuthStorage() {
+    if (typeof window === "undefined") return;
+
+    localStorage.removeItem("token");
+    localStorage.removeItem("user_id");
+    localStorage.removeItem("user_name");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user_id");
+    sessionStorage.removeItem("user_name");
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    // Always read latest token from storage to avoid stale token issue
     if (typeof window !== "undefined") {
       this.token = localStorage.getItem("token") || sessionStorage.getItem("token") || this.token;
     }
@@ -43,38 +107,24 @@ class ApiClient {
       (headers as Record<string, string>)["Authorization"] = `Bearer ${this.token}`;
     }
 
-    try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        ...options,
-        headers,
-      });
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...options,
+      headers,
+    });
 
-      const data = await response.json();
+    const data = (await response.json()) as ApiResponse<T>;
 
-      if (data.code !== 10000) {
-        // Token 无效/过期时，自动清除本地存储
-        if (data.code === 10012 || data.msg === "无效的token" || data.msg === "token is expired") {
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("token");
-            localStorage.removeItem("user_id");
-            localStorage.removeItem("user_name");
-            sessionStorage.removeItem("token");
-            sessionStorage.removeItem("user_id");
-            sessionStorage.removeItem("user_name");
-          }
-          this.clearToken();
-        }
-        throw new Error(data.msg || "请求失败");
+    if (data.code !== 10000) {
+      if (data.code === 10012 || data.msg.includes("token")) {
+        this.clearAuthStorage();
+        this.clearToken();
       }
-
-      return data;
-    } catch (error) {
-      // Network error or API unavailable - rethrow for caller to handle
-      throw error;
+      throw new Error(data.msg || "请求失败，请稍后再试");
     }
+
+    return data;
   }
 
-  // Auth endpoints
   async signup(username: string, password: string, rePassword: string) {
     return this.request("/signup", {
       method: "POST",
@@ -83,42 +133,32 @@ class ApiClient {
   }
 
   async login(username: string, password: string) {
-    const response = await this.request<{ user_id: string; user_name: string; token: string }>(
-      "/login",
-      {
-        method: "POST",
-        body: JSON.stringify({ username, password }),
-      }
-    );
-    
+    const response = await this.request<UserSummary & { token: string }>("/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+
     if (response.data.token) {
       this.setToken(response.data.token);
     }
-    
+
     return response;
   }
 
-  // Community endpoints
   async getCommunities() {
-    return this.request<Array<{ community_id: string; name: string }>>(
-      "/community"
-    );
+    return this.request<CommunitySummary[]>("/community");
   }
 
   async getHotCommunities(limit?: number) {
     const query = limit ? `?limit=${limit}` : "";
-    return this.request<Array<{
-      community_id: string;
-      community_name: string;
-    }>>(`/hot_communities${query}`);
+    return this.request<HotCommunity[]>(`/hot_communities${query}`);
   }
 
   async getRandomCommunities(limit?: number) {
     const query = limit ? `?limit=${limit}` : "";
-    return this.request<Array<{ community_id: string; name: string }>>(`/random_communities${query}`);
+    return this.request<CommunitySummary[]>(`/random_communities${query}`);
   }
 
-  // 关注社区相关
   async followCommunity(communityId: string) {
     return this.request("/follow", {
       method: "POST",
@@ -133,24 +173,18 @@ class ApiClient {
     });
   }
 
-  async isFollowedCommunity(communityId: string): Promise<{ is_followed: boolean }> {
-    return this.request(`/is_followed?community_id=${communityId}`);
+  async isFollowedCommunity(communityId: string) {
+    return this.request<{ is_followed: boolean }>(`/is_followed?community_id=${communityId}`);
   }
 
   async getFollowedCommunities() {
-    return this.request<Array<{ community_id: string; name: string }>>("/followed_communities");
+    return this.request<CommunitySummary[]>("/followed_communities");
   }
 
   async getCommunityDetail(id: string) {
-    return this.request<{
-      community_id: string;
-      name: string;
-      introduction: string;
-      create_time: string;
-    }>(`/community/${id}`);
+    return this.request<CommunityDetail>(`/community/${id}`);
   }
 
-  // Post endpoints
   async getPosts(params?: {
     page?: number;
     size?: number;
@@ -166,36 +200,11 @@ class ApiClient {
     if (params?.order) searchParams.set("order", params.order);
 
     const query = searchParams.toString();
-    return this.request<{
-      list: Array<{
-        post_id: string;
-        title: string;
-        summary: string;
-        user_name: string;
-        community_name: string;
-        create_time: string;
-        like_count: number;
-        comment_count: number;
-      }>;
-      total: number;
-    }>(`/posts${query ? `?${query}` : ""}`);
+    return this.request<PostsResponse | PostListItem[]>(`/posts${query ? `?${query}` : ""}`);
   }
 
   async getPostDetail(id: string) {
-    return this.request<{
-      post_id: string;
-      title: string;
-      content: string;
-      author_name: string;
-      community: {
-        community_id: string;
-        name: string;
-        introduction: string;
-      };
-      create_time: string;
-      like_count: number;
-      comment_count: number;
-    }>(`/post_detail/${id}`);
+    return this.request<PostDetail>(`/post_detail/${id}`);
   }
 
   async createPost(title: string, content: string, communityId: string) {
@@ -209,7 +218,6 @@ class ApiClient {
     });
   }
 
-  // Vote endpoints
   async vote(postId: string, direction: number) {
     return this.request("/vote", {
       method: "POST",

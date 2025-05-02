@@ -1,182 +1,128 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { User, Award } from "lucide-react";
+import { Award, MessageSquareText, PenLine, ShieldCheck, UserRound } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-
-function CountdownTimer() {
-  const [timeLeft, setTimeLeft] = useState("");
-
-  useEffect(() => {
-    const target = new Date();
-    target.setDate(target.getDate() + 3);
-    target.setHours(23, 59, 59, 0);
-
-    const update = () => {
-      const now = new Date();
-      const diff = target.getTime() - now.getTime();
-      if (diff <= 0) {
-        setTimeLeft("已结束");
-        return;
-      }
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-      const mins = Math.floor((diff / (1000 * 60)) % 60);
-      const secs = Math.floor((diff / 1000) % 60);
-      setTimeLeft(`还剩 ${days} 天 ${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`);
-    };
-
-    update();
-    const timer = setInterval(update, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  return <span className="text-xs text-gray-500">{timeLeft}</span>;
-}
+import Badge from "@/components/ui/Badge";
 
 export default function RightSidebar() {
   const { user } = useAuth();
 
   return (
-    <aside className="w-80 bg-white border-l border-gray-200 h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto hidden xl:block">
-      <div className="p-4">
-        {user ? (
-          /* Logged In User Card */
-          <div className="bg-gradient-to-br from-primary to-primary-dark rounded-lg p-6 text-white mb-6">
-            <div className="flex items-center space-x-4 mb-4">
-              <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center">
-                <User className="h-8 w-8" />
+    <aside className="sticky top-21 hidden h-[calc(100vh-5.25rem)] overflow-y-auto xl:block scrollbar-thin">
+      <div className="space-y-4">
+        <section className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+          {user ? (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-white">
+                  <UserRound className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-foreground">{user.user_name}</p>
+                  <p className="truncate text-xs text-muted">ID {user.user_id}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-bold">{user.user_name}</h3>
-                <p className="text-sm text-gray-200">
-                  ID: {user.user_id}
-                </p>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-surface-soft p-3">
+                  <p className="text-lg font-bold text-foreground">0</p>
+                  <p className="text-xs text-muted">发布</p>
+                </div>
+                <div className="rounded-lg bg-surface-soft p-3">
+                  <p className="text-lg font-bold text-foreground">0</p>
+                  <p className="text-xs text-muted">关注者</p>
+                </div>
               </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div className="bg-white/10 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold">0</div>
-                <div className="text-xs text-gray-200">帖子</div>
-              </div>
-              <div className="bg-white/10 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold">0</div>
-                <div className="text-xs text-gray-200">粉丝</div>
-              </div>
-            </div>
-            
-            <Link
-              href="/submit"
-              className="block mt-4 bg-accent hover:bg-yellow-600 text-white text-center py-2 rounded-lg font-medium transition-colors"
-            >
-              发帖
-            </Link>
-          </div>
-        ) : (
-          /* Login/Signup Card */
-          <div className="bg-gray-50 rounded-lg p-6 mb-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">
-              欢迎来到 SayIt
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              登录以参与讨论、发帖和投票
-            </p>
-            <div className="space-y-3">
               <Link
-                href="/login"
-                className="block w-full bg-primary hover:bg-primary-light text-white text-center py-2 rounded-lg font-medium transition-colors"
+                href="/submit"
+                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-white transition hover:bg-primary-dark"
               >
-                登录
+                <PenLine className="h-4 w-4" />
+                写一篇帖子
               </Link>
-              <Link
-                href="/signup"
-                className="block w-full bg-white hover:bg-gray-50 text-primary border border-primary text-center py-2 rounded-lg font-medium transition-colors"
-              >
-                注册
-              </Link>
+            </>
+          ) : (
+            <>
+              <Badge tone="primary">欢迎来到 SayIt</Badge>
+              <h2 className="mt-3 text-lg font-semibold text-foreground">把想法晒出来，让讨论慢慢长出来。</h2>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                登录后可以发布帖子、关注社区、参与投票和评论。
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Link
+                  href="/login"
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-primary text-sm font-medium text-white transition hover:bg-primary-dark"
+                >
+                  登录
+                </Link>
+                <Link
+                  href="/signup"
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-muted-strong transition hover:bg-surface-soft"
+                >
+                  注册
+                </Link>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+          <div className="flex items-center gap-2">
+            <MessageSquareText className="h-5 w-5 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">社区公告</h2>
+          </div>
+          <div className="mt-4 space-y-4">
+            <div>
+              <div className="mb-1 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-primary" />
+                <span className="text-xs font-semibold text-primary">进行中</span>
+              </div>
+              <p className="text-sm font-medium text-foreground">夏季摄影与生活记录征集</p>
+              <p className="mt-1 text-xs text-muted">分享一张照片和背后的故事。</p>
+            </div>
+            <div>
+              <div className="mb-1 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-accent" />
+                <span className="text-xs font-semibold text-accent">即将开始</span>
+              </div>
+              <p className="text-sm font-medium text-foreground">独立开发者圆桌 AMA</p>
+              <p className="mt-1 text-xs text-muted">明天 20:00 开放提问。</p>
             </div>
           </div>
-        )}
+        </section>
 
-        {/* Community Bulletin Board */}
-        <div className="bg-gray-50 rounded-lg overflow-hidden mb-6">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-            <h3 className="text-sm font-bold text-gray-900 flex items-center">
-              <span className="mr-2">📢</span>
-              社区活动
-            </h3>
-            <span className="text-xs text-primary cursor-pointer hover:underline">更多</span>
+        <section className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Award className="h-5 w-5 text-accent" />
+            <h2 className="text-sm font-semibold text-foreground">社区规则</h2>
           </div>
-
-          <div className="divide-y divide-gray-200">
-            {/* Ongoing */}
-            <div className="px-4 py-3">
-              <div className="flex items-center space-x-2 mb-1">
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                <span className="text-xs font-medium text-red-600">进行中</span>
-              </div>
-              <p className="text-sm font-medium text-gray-900">2025夏季摄影大赛</p>
-              <CountdownTimer />
-            </div>
-
-            {/* Upcoming */}
-            <div className="px-4 py-3">
-              <div className="flex items-center space-x-2 mb-1">
-                <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-                <span className="text-xs font-medium text-yellow-600">即将开始</span>
-              </div>
-              <p className="text-sm font-medium text-gray-900">AMA：独立开发者圆桌</p>
-              <span className="text-xs text-gray-500">明天 20:00 开始</span>
-            </div>
-
-            {/* Preview */}
-            <div className="px-4 py-3">
-              <div className="flex items-center space-x-2 mb-1">
-                <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                <span className="text-xs font-medium text-gray-500">预告</span>
-              </div>
-              <p className="text-sm font-medium text-gray-900">晒意一周年庆生</p>
-              <span className="text-xs text-gray-500">5月20日</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Rules */}
-        <div className="bg-gray-50 rounded-lg p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-            <Award className="h-5 w-5 mr-2 text-primary" />
-            社区规则
-          </h3>
-          <ul className="space-y-2 text-sm text-gray-600">
-            <li className="flex items-start">
-              <span className="text-primary mr-2">1.</span>
-              尊重他人，友好交流
+          <ul className="mt-4 space-y-3 text-sm leading-6 text-muted-strong">
+            <li className="flex gap-2">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              尊重他人，表达观点时保留善意。
             </li>
-            <li className="flex items-start">
-              <span className="text-primary mr-2">2.</span>
-              禁止发布垃圾信息
+            <li className="flex gap-2">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              不发布垃圾广告、恶意引战或违法内容。
             </li>
-            <li className="flex items-start">
-              <span className="text-primary mr-2">3.</span>
-              保护个人隐私
-            </li>
-            <li className="flex items-start">
-              <span className="text-primary mr-2">4.</span>
-              遵守法律法规
+            <li className="flex gap-2">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              保护隐私，不公开他人的敏感信息。
             </li>
           </ul>
-        </div>
+        </section>
 
-        {/* Footer */}
-        <div className="mt-6 text-center">
-          <p className="text-base font-bold rainbow-text">晒一个有意思的灵魂</p>
-          <div className="mt-2 space-x-4 text-xs text-gray-500">
-            <Link href="/about" className="hover:text-primary">关于</Link>
-            <Link href="/help" className="hover:text-primary">帮助</Link>
+        <footer className="px-2 text-center text-xs text-muted">
+          <p className="rainbow-text text-lg font-bold leading-7">晒一个有意思的灵魂</p>
+          <div className="mt-2 flex justify-center gap-4">
+            <Link href="/about" className="hover:text-primary">
+              关于
+            </Link>
+            <Link href="/help" className="hover:text-primary">
+              帮助
+            </Link>
           </div>
-        </div>
+        </footer>
       </div>
     </aside>
   );

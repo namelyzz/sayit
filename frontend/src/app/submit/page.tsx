@@ -1,26 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FileText, Send } from "lucide-react";
+import Button from "@/components/ui/Button";
+import PageShell from "@/components/ui/PageShell";
+import { FieldHint, FieldLabel, Input, Select, Textarea } from "@/components/ui/Field";
+import { apiClient, type CommunitySummary } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { apiClient } from "@/lib/api";
-
-interface Community {
-  community_id: string;
-  name: string;
-}
+import { getErrorMessage } from "@/lib/utils";
 
 export default function SubmitPage() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [communityId, setCommunityId] = useState("");
-  const [communities, setCommunities] = useState<Community[]>([]);
+  const [communities, setCommunities] = useState<CommunitySummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    if (authLoading) return;
+
     if (!user) {
       router.push("/login");
       return;
@@ -29,15 +31,14 @@ export default function SubmitPage() {
     const fetchCommunities = async () => {
       try {
         const response = await apiClient.getCommunities();
-        setCommunities(response.data);
-      } catch (error) {
-        console.error("Failed to fetch communities:", error);
-        setError("加载社区列表失败，请检查后端服务是否已启动");
+        setCommunities(response.data ?? []);
+      } catch (err) {
+        setError(getErrorMessage(err, "社区列表加载失败，请确认后端服务已启动。"));
       }
     };
 
     fetchCommunities();
-  }, [user, router]);
+  }, [user, authLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,107 +46,103 @@ export default function SubmitPage() {
     setError("");
 
     if (!title.trim() || !content.trim() || !communityId) {
-      setError("请填写所有必填字段");
+      setError("请填写标题、内容并选择社区。");
       setLoading(false);
       return;
     }
 
     try {
-      await apiClient.createPost(title, content, communityId);
+      await apiClient.createPost(title.trim(), content.trim(), communityId);
       router.push("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "发帖失败，请稍后再试");
+      setError(getErrorMessage(err, "发布失败，请稍后再试。"));
     } finally {
       setLoading(false);
     }
   };
 
-  if (!user) {
+  if (authLoading || !user) {
     return null;
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">发布新帖子</h1>
-      
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
-            <span className="block sm:inline">{error}</span>
+    <PageShell className="max-w-3xl">
+      <section className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-teal-50 text-primary">
+            <FileText className="h-5 w-5" />
           </div>
-        )}
+          <div>
+            <p className="text-sm font-medium text-primary">发布新帖子</p>
+            <h1 className="text-2xl font-bold text-foreground">把想法写清楚，也写得好读</h1>
+          </div>
+        </div>
+      </section>
 
-        <div>
-          <label htmlFor="community" className="block text-sm font-medium text-gray-700 mb-2">
-            选择社区
-          </label>
-          <select
-            id="community"
-            value={communityId}
-            onChange={(e) => setCommunityId(e.target.value)}
-            required
-            disabled={communities.length === 0}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
-            <option value="">请选择社区</option>
-            {communities.map((community) => (
-              <option key={community.community_id} value={community.community_id}>
-                {community.name}
-              </option>
-            ))}
-          </select>
-          {communities.length === 0 && <p className="text-sm text-gray-500 mt-1">暂无可用社区</p>}
+      <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+        {error ? (
+          <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger">{error}</div>
+        ) : null}
+
+        <div className="space-y-5">
+          <div>
+            <FieldLabel htmlFor="community">发布到</FieldLabel>
+            <Select
+              id="community"
+              value={communityId}
+              onChange={(e) => setCommunityId(e.target.value)}
+              required
+              disabled={communities.length === 0}
+            >
+              <option value="">选择一个社区</option>
+              {communities.map((community) => (
+                <option key={community.community_id} value={community.community_id}>
+                  {community.name}
+                </option>
+              ))}
+            </Select>
+            <FieldHint>{communities.length === 0 ? "暂无可用社区。" : "选择最贴近主题的社区，讨论会更容易被看见。"}</FieldHint>
+          </div>
+
+          <div>
+            <FieldLabel htmlFor="title">标题</FieldLabel>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              maxLength={128}
+              placeholder="用一句话说清楚你想讨论什么"
+            />
+            <FieldHint>{title.length}/128</FieldHint>
+          </div>
+
+          <div>
+            <FieldLabel htmlFor="content">正文</FieldLabel>
+            <Textarea
+              id="content"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              required
+              rows={14}
+              maxLength={8192}
+              placeholder="写下背景、观点、问题或你希望大家回应的方向..."
+              className="resize-y"
+            />
+            <FieldHint>{content.length}/8192</FieldHint>
+          </div>
         </div>
 
-        <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-            标题
-          </label>
-          <input
-            id="title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            maxLength={128}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            placeholder="请输入标题（最多128字）"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
-            内容
-          </label>
-          <textarea
-            id="content"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            required
-            rows={10}
-            maxLength={8192}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
-            placeholder="请输入内容（最多8192字）"
-          ></textarea>
-        </div>
-
-        <div className="flex justify-end space-x-4">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-          >
+        <div className="mt-6 flex justify-end gap-3">
+          <Button variant="outline" onClick={() => router.back()}>
             取消
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-2 bg-primary hover:bg-primary-light text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          </Button>
+          <Button type="submit" disabled={loading}>
+            <Send className="h-4 w-4" />
             {loading ? "发布中..." : "发布"}
-          </button>
+          </Button>
         </div>
       </form>
-    </div>
+    </PageShell>
   );
 }

@@ -1,45 +1,66 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { Home, TrendingUp, Shuffle, Heart } from "lucide-react";
-import { apiClient } from "@/lib/api";
+import { useCallback, useEffect, useState } from "react";
+import { Flame, Heart, Home, RefreshCw, Sparkles } from "lucide-react";
+import { apiClient, type CommunitySummary, type HotCommunity } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-
-interface HotCommunity {
-  community_id: string;
-  community_name: string;
-}
-
-interface RandomCommunity {
-  community_id: string;
-  name: string;
-}
-
-interface FollowedCommunity {
-  community_id: string;
-  name: string;
-}
+import { cn, getErrorMessage } from "@/lib/utils";
 
 const FOLLOW_REFRESH_EVENT = "follow-refresh";
 
-export default function Sidebar() {
-  const { user, loading: authLoading } = useAuth();
+function CommunityLink({
+  href,
+  label,
+  icon,
+  tone = "neutral",
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  tone?: "neutral" | "accent" | "primary";
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-strong transition hover:bg-surface-soft hover:text-foreground"
+    >
+      <span
+        className={cn(
+          "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+          tone === "primary" && "bg-teal-50 text-primary",
+          tone === "accent" && "bg-accent-soft text-accent",
+          tone === "neutral" && "bg-surface-soft text-muted"
+        )}
+      >
+        {icon}
+      </span>
+      <span className="truncate">{label}</span>
+    </Link>
+  );
+}
 
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="px-3 text-xs font-semibold uppercase text-muted">{children}</h3>;
+}
+
+export default function Sidebar() {
+  const { user } = useAuth();
   const [hotCommunities, setHotCommunities] = useState<HotCommunity[]>([]);
-  const [randomCommunities, setRandomCommunities] = useState<RandomCommunity[]>([]);
-  const [followedCommunities, setFollowedCommunities] = useState<FollowedCommunity[]>([]);
+  const [randomCommunities, setRandomCommunities] = useState<CommunitySummary[]>([]);
+  const [followedCommunities, setFollowedCommunities] = useState<CommunitySummary[]>([]);
   const [hotLoading, setHotLoading] = useState(true);
   const [randomLoading, setRandomLoading] = useState(true);
-  const [followedLoading, setFollowedLoading] = useState(true);
+  const [followedLoading, setFollowedLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const fetchHotCommunities = async () => {
       try {
-        const response = await apiClient.getHotCommunities(5);
+        const response = await apiClient.getHotCommunities(6);
         setHotCommunities(response.data ?? []);
-      } catch (error) {
-        console.error("Failed to fetch hot communities:", error);
+      } catch (err) {
+        setError(getErrorMessage(err, "社区列表暂时不可用"));
         setHotCommunities([]);
       } finally {
         setHotLoading(false);
@@ -54,8 +75,8 @@ export default function Sidebar() {
     try {
       const response = await apiClient.getRandomCommunities(5);
       setRandomCommunities(response.data ?? []);
-    } catch (error) {
-      console.error("Failed to fetch random communities:", error);
+    } catch (err) {
+      setError(getErrorMessage(err, "推荐社区暂时不可用"));
       setRandomCommunities([]);
     } finally {
       setRandomLoading(false);
@@ -64,10 +85,9 @@ export default function Sidebar() {
 
   useEffect(() => {
     fetchRandomCommunities();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchFollowedCommunities = async () => {
+  const fetchFollowedCommunities = useCallback(async () => {
     if (!user) {
       setFollowedCommunities([]);
       setFollowedLoading(false);
@@ -78,171 +98,113 @@ export default function Sidebar() {
     try {
       const response = await apiClient.getFollowedCommunities();
       setFollowedCommunities(response.data ?? []);
-    } catch (error: any) {
-      console.error("Failed to fetch followed communities:", error);
-      // apiClient 会自动清除无效 token，这里只清空列表
+    } catch {
       setFollowedCommunities([]);
     } finally {
       setFollowedLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (!user) {
-      setFollowedCommunities([]);
-      setFollowedLoading(false);
-      return;
-    }
-
-    fetchFollowedCommunities();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // 监听关注刷新事件
+  useEffect(() => {
+    fetchFollowedCommunities();
+  }, [fetchFollowedCommunities]);
+
   useEffect(() => {
     const handler = () => {
       fetchFollowedCommunities();
     };
     window.addEventListener(FOLLOW_REFRESH_EVENT, handler);
-    return () => {
-      window.removeEventListener(FOLLOW_REFRESH_EVENT, handler);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    return () => window.removeEventListener(FOLLOW_REFRESH_EVENT, handler);
+  }, [fetchFollowedCommunities]);
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto hidden lg:block">
-      <div className="p-4">
-        {/* Navigation Links */}
-        <nav className="space-y-1 mb-6">
-          <Link
-            href="/"
-            className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <Home className="h-5 w-5" />
-            <span>首页</span>
-          </Link>
-        </nav>
+    <aside className="sticky top-21 hidden h-[calc(100vh-5.25rem)] overflow-y-auto rounded-lg border border-border bg-surface/80 p-3 shadow-sm backdrop-blur lg:block scrollbar-thin">
+      <nav className="space-y-1">
+        <CommunityLink href="/" label="首页" icon={<Home className="h-4 w-4" />} tone="primary" />
+      </nav>
 
-        {/* Divider */}
-        <div className="border-t border-gray-200 my-4"></div>
+      {user ? (
+        <section className="mt-6 space-y-3">
+          <SectionTitle>我的社区</SectionTitle>
+          {followedLoading ? (
+            <div className="space-y-2 px-3">
+              <div className="h-9 animate-pulse rounded-lg bg-surface-muted" />
+              <div className="h-9 animate-pulse rounded-lg bg-surface-muted" />
+            </div>
+          ) : followedCommunities.length > 0 ? (
+            <div className="space-y-1">
+              {followedCommunities.map((community) => (
+                <CommunityLink
+                  key={community.community_id}
+                  href={`/community/${community.community_id}`}
+                  label={community.name}
+                  icon={<Heart className="h-4 w-4 fill-current" />}
+                  tone="primary"
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="px-3 text-sm leading-6 text-muted">关注社区后，会在这里快速进入。</p>
+          )}
+        </section>
+      ) : null}
 
-        {/* Followed Communities Section (only for logged-in users) */}
-        {user && (
-          <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              已关注社区
-            </h3>
-            {followedLoading ? (
-              <div className="space-y-2">
-                {[...Array(3)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-10 bg-gray-100 rounded-lg animate-pulse"
-                  ></div>
-                ))}
-              </div>
-            ) : followedCommunities.length > 0 ? (
-              <div className="space-y-1">
-                {followedCommunities.map((community) => (
-                  <Link
-                    key={community.community_id}
-                    href={`/community/${community.community_id}`}
-                    className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    <Heart className="h-4 w-4 text-primary fill-current" />
-                    <span className="text-sm font-medium">
-                      {community.name}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-400 py-2">尚未关注任何社区</p>
-            )}
-            <div className="border-t border-gray-200 my-4"></div>
+      <section className="mt-6 space-y-3">
+        <SectionTitle>热门社区</SectionTitle>
+        {hotLoading ? (
+          <div className="space-y-2 px-3">
+            <div className="h-9 animate-pulse rounded-lg bg-surface-muted" />
+            <div className="h-9 animate-pulse rounded-lg bg-surface-muted" />
+            <div className="h-9 animate-pulse rounded-lg bg-surface-muted" />
           </div>
+        ) : hotCommunities.length > 0 ? (
+          <div className="space-y-1">
+            {hotCommunities.map((community) => (
+              <CommunityLink
+                key={community.community_id}
+                href={`/community/${community.community_id}`}
+                label={community.community_name}
+                icon={<Flame className="h-4 w-4" />}
+                tone="accent"
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="px-3 text-sm leading-6 text-muted">暂无热门社区。</p>
         )}
+      </section>
 
-        {/* Hot Communities Section */}
-        <div>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            热门社区
-          </h3>
-          {hotLoading ? (
-            <div className="space-y-2">
-              {[...Array(3)].map((_, i) => (
-                <div
-                  key={i}
-                  className="h-10 bg-gray-100 rounded-lg animate-pulse"
-                ></div>
-              ))}
-            </div>
-          ) : hotCommunities.length > 0 ? (
-            <div className="space-y-1">
-              {hotCommunities.map((community) => (
-                <Link
-                  key={community.community_id}
-                  href={`/community/${community.community_id}`}
-                  className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <TrendingUp className="h-4 w-4 text-accent" />
-                  <span className="text-sm font-medium">
-                    {community.community_name}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400 py-2">暂无热门社区</p>
-          )}
+      <section className="mt-6 space-y-3">
+        <div className="flex items-center justify-between px-3">
+          <SectionTitle>随便逛逛</SectionTitle>
+          <button
+            onClick={fetchRandomCommunities}
+            disabled={randomLoading}
+            className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-primary transition hover:bg-teal-50 disabled:opacity-50"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", randomLoading && "animate-spin")} />
+            换一批
+          </button>
         </div>
-
-        {/* Random Recommended Communities */}
-        <div className="border-t border-gray-200 my-4 pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              随机推荐
-            </h3>
-            <button
-              onClick={fetchRandomCommunities}
-              disabled={randomLoading}
-              className="text-xs text-primary hover:text-primary/80 disabled:opacity-50 flex items-center gap-1 transition-colors"
-              title="刷新推荐"
-            >
-              <Shuffle className={`h-3 w-3 ${randomLoading ? "animate-spin" : ""}`} />
-              刷新
-            </button>
+        {randomCommunities.length > 0 ? (
+          <div className="space-y-1">
+            {randomCommunities.map((community) => (
+              <CommunityLink
+                key={community.community_id}
+                href={`/community/${community.community_id}`}
+                label={community.name}
+                icon={<Sparkles className="h-4 w-4" />}
+              />
+            ))}
           </div>
-          {randomLoading ? (
-            <div className="space-y-2">
-              {[...Array(3)].map((_, i) => (
-                <div
-                  key={i}
-                  className="h-10 bg-gray-100 rounded-lg animate-pulse"
-                ></div>
-              ))}
-            </div>
-          ) : randomCommunities.length > 0 ? (
-            <div className="space-y-1">
-              {randomCommunities.map((community) => (
-                <Link
-                  key={community.community_id}
-                  href={`/community/${community.community_id}`}
-                  className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <Shuffle className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm font-medium">
-                    {community.name}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400 py-2">暂无推荐社区</p>
-          )}
-        </div>
-      </div>
+        ) : (
+          <p className="px-3 text-sm leading-6 text-muted">
+            {randomLoading ? "正在寻找社区..." : "暂无推荐社区。"}
+          </p>
+        )}
+      </section>
+
+      {error ? <p className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-xs text-danger">{error}</p> : null}
     </aside>
   );
 }

@@ -1,28 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import PostCard from "@/components/ui/PostCard";
-import { apiClient } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Clock3, Flame, PenLine } from "lucide-react";
+import PostCard from "@/components/ui/PostCard";
+import Button from "@/components/ui/Button";
+import EmptyState from "@/components/ui/EmptyState";
+import PageShell from "@/components/ui/PageShell";
+import { PostCardSkeleton } from "@/components/ui/Skeleton";
+import { apiClient, type PostListItem, type PostsResponse } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { cn, getErrorMessage } from "@/lib/utils";
 
-interface Post {
-  post_id: string;
-  title: string;
-  summary: string;
-  user_name: string;
-  community_id: string;
-  community_name: string;
-  create_time: string;
-  like_count: number;
-  comment_count: number;
+type SortBy = "create_time" | "score";
+
+function normalizePosts(data: PostsResponse | PostListItem[] | undefined) {
+  if (!data) return { list: [] as PostListItem[], total: 0 };
+  if (Array.isArray(data)) return { list: data, total: data.length };
+  return { list: data.list ?? [], total: data.total ?? 0 };
 }
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<PostListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<"create_time" | "score">("create_time");
+  const [sortBy, setSortBy] = useState<SortBy>("create_time");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState("");
@@ -33,6 +35,7 @@ export default function Home() {
 
     const fetchPosts = async () => {
       setLoading(true);
+      setError("");
       try {
         const response = await apiClient.getPosts({
           page,
@@ -40,18 +43,16 @@ export default function Home() {
           sort_by: sortBy,
           order: "desc",
         });
-        const postsData = Array.isArray(response.data) ? response.data : (response.data?.list ?? []);
-        const totalData = Array.isArray(response.data) ? response.data.length : (response.data?.total ?? 0);
-        setPosts(postsData);
-        setTotal(totalData);
+        const normalized = normalizePosts(response.data);
+        setPosts(normalized.list);
+        setTotal(normalized.total);
         setNeedLogin(false);
-      } catch (error: any) {
-        console.error("Failed to fetch posts:", error);
+      } catch (err) {
         if (!user) {
           setNeedLogin(true);
           setPosts([]);
         } else {
-          setError("加载帖子失败，请检查后端服务是否已启动");
+          setError(getErrorMessage(err, "帖子加载失败，请确认后端服务已启动。"));
           setPosts([]);
         }
       } finally {
@@ -62,101 +63,105 @@ export default function Home() {
     fetchPosts();
   }, [sortBy, page, user, authLoading]);
 
+  const hasNextPage = useMemo(() => posts.length === 10 && (total === 0 || page * 10 < total), [page, posts, total]);
+
   return (
-    <div>
-      {/* Sort Controls */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-        <div className="flex items-center space-x-4">
-          <span className="text-sm font-medium text-gray-700">排序：</span>
-          <button
-            onClick={() => { setSortBy("create_time"); setPage(1); }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              sortBy === "create_time"
-                ? "bg-primary text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
+    <PageShell>
+      <section className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-primary">全站信息流</p>
+            <h1 className="mt-1 text-2xl font-bold text-foreground">今天大家在聊什么</h1>
+            <p className="mt-2 text-sm text-muted">按时间或热度浏览社区里的新想法。</p>
+          </div>
+          <Link
+            href="/submit"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white transition hover:bg-primary-dark"
           >
+            <PenLine className="h-4 w-4" />
+            发布帖子
+          </Link>
+        </div>
+
+        <div className="mt-5 inline-flex rounded-lg bg-surface-soft p-1">
+          <button
+            onClick={() => {
+              setSortBy("create_time");
+              setPage(1);
+            }}
+            className={cn(
+              "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition",
+              sortBy === "create_time" ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"
+            )}
+          >
+            <Clock3 className="h-4 w-4" />
             最新
           </button>
           <button
-            onClick={() => { setSortBy("score"); setPage(1); }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              sortBy === "score"
-                ? "bg-primary text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
+            onClick={() => {
+              setSortBy("score");
+              setPage(1);
+            }}
+            className={cn(
+              "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition",
+              sortBy === "score" ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"
+            )}
           >
+            <Flame className="h-4 w-4" />
             热门
           </button>
         </div>
-      </div>
+      </section>
 
-      {/* Posts List */}
-      <div className="space-y-4">
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
-            <span className="block sm:inline">{error}</span>
-          </div>
-        )}
-        {needLogin && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-            <p className="text-gray-600 mb-4">登录后查看帖子内容</p>
+      {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger">{error}</div> : null}
+
+      {needLogin ? (
+        <EmptyState
+          title="登录后查看帖子内容"
+          description="SayIt 会根据你的登录状态返回可浏览的帖子列表。"
+          action={
             <Link
               href="/login"
-              className="inline-block px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-white transition hover:bg-primary-dark"
             >
               去登录
             </Link>
-          </div>
-        )}
-        {loading ? (
-          [...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 animate-pulse"
-            >
-              <div className="flex">
-                <div className="w-10 bg-gray-200 rounded mr-4"></div>
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-                  <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                </div>
-              </div>
-            </div>
-          ))
-        ) : posts && posts.length > 0 ? (
-          posts.map((post) => <PostCard key={post.post_id} post={post} />)
-        ) : !needLogin && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-            <p className="text-gray-500">暂无帖子</p>
-          </div>
-        )}
+          }
+        />
+      ) : null}
+
+      <div className="space-y-3">
+        {loading
+          ? Array.from({ length: 5 }).map((_, index) => <PostCardSkeleton key={index} />)
+          : posts.map((post) => <PostCard key={post.post_id} post={post} />)}
       </div>
 
-      {/* Pagination */}
-      {total > 10 && (
-        <div className="mt-6 flex justify-center space-x-2">
-          <button
-            onClick={() => setPage(Math.max(1, page - 1))}
-            disabled={page === 1}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+      {!loading && !needLogin && posts.length === 0 ? (
+        <EmptyState
+          title="暂时还没有帖子"
+          description="成为第一个发起讨论的人，让社区有个漂亮的开场。"
+          action={
+            <Link
+              href="/submit"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-white transition hover:bg-primary-dark"
+            >
+              发布第一篇
+            </Link>
+          }
+        />
+      ) : null}
+
+      {total > 10 || page > 1 ? (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Button variant="outline" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
             上一页
-          </button>
-          <span className="px-4 py-2 text-sm text-gray-700">
-            第 {page} 页
-          </span>
-          <button
-            onClick={() => setPage(page + 1)}
-            disabled={!posts || posts.length < 10}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          </Button>
+          <span className="text-sm font-medium text-muted-strong">第 {page} 页</span>
+          <Button variant="outline" disabled={!hasNextPage} onClick={() => setPage((value) => value + 1)}>
             下一页
-          </button>
+          </Button>
         </div>
-      )}
-    </div>
+      ) : null}
+    </PageShell>
   );
 }

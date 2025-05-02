@@ -1,38 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { Calendar, Heart, PenLine, Users } from "lucide-react";
 import PostCard from "@/components/ui/PostCard";
-import { apiClient } from "@/lib/api";
+import Button from "@/components/ui/Button";
+import EmptyState from "@/components/ui/EmptyState";
+import PageShell from "@/components/ui/PageShell";
+import { PostCardSkeleton, Skeleton } from "@/components/ui/Skeleton";
+import { apiClient, type CommunityDetail, type PostListItem, type PostsResponse } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Users, Calendar, Heart } from "lucide-react";
+import { formatDate } from "@/lib/format";
+import { cn, getErrorMessage } from "@/lib/utils";
 
-interface Community {
-  community_id: string;
-  name: string;
-  introduction: string;
-  create_time: string;
-}
-
-interface Post {
-  post_id: string;
-  title: string;
-  summary: string;
-  user_name: string;
-  community_name: string;
-  create_time: string;
-  like_count: number;
-  comment_count: number;
+function normalizePosts(data: PostsResponse | PostListItem[] | undefined) {
+  if (!data) return [] as PostListItem[];
+  return Array.isArray(data) ? data : data.list ?? [];
 }
 
 export default function CommunityPage() {
   const params = useParams();
+  const router = useRouter();
   const communityId = params.id as string;
   const { user, loading: authLoading } = useAuth();
 
-  const [community, setCommunity] = useState<Community | null>(null);
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [community, setCommunity] = useState<CommunityDetail | null>(null);
+  const [posts, setPosts] = useState<PostListItem[]>([]);
   const [isFollowed, setIsFollowed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
@@ -43,6 +37,7 @@ export default function CommunityPage() {
 
     const fetchData = async () => {
       setLoading(true);
+      setError("");
       try {
         const [communityResponse, postsResponse] = await Promise.all([
           apiClient.getCommunityDetail(communityId),
@@ -50,10 +45,8 @@ export default function CommunityPage() {
         ]);
 
         setCommunity(communityResponse.data);
-        const postsData = Array.isArray(postsResponse.data) ? postsResponse.data : (postsResponse.data?.list ?? []);
-        setPosts(postsData);
+        setPosts(normalizePosts(postsResponse.data));
 
-        // 检查关注状态（仅登录用户）
         if (user) {
           try {
             const followResponse = await apiClient.isFollowedCommunity(communityId);
@@ -62,26 +55,19 @@ export default function CommunityPage() {
             setIsFollowed(false);
           }
         }
-      } catch (error: any) {
-        console.error("Failed to fetch community data:", error);
-        const msg = error?.message || "";
-        if (msg.includes("token") || msg.includes("登录")) {
-          setError("登录后查看完整内容");
-        } else {
-          setError("加载社区数据失败，请检查后端服务是否已启动");
-        }
+      } catch (err) {
+        setError(getErrorMessage(err, "社区数据加载失败，请确认后端服务已启动。"));
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [communityId, authLoading]);
+  }, [communityId, authLoading, user]);
 
   const handleFollowToggle = async () => {
     if (!user) {
-      window.location.href = "/login";
+      router.push("/login");
       return;
     }
 
@@ -94,15 +80,13 @@ export default function CommunityPage() {
         await apiClient.followCommunity(communityId);
         setIsFollowed(true);
       }
-      // 通知左侧栏刷新已关注社区列表
       window.dispatchEvent(new CustomEvent("follow-refresh"));
-    } catch (error: any) {
-      console.error("Follow toggle failed:", error);
-      // Token 无效时 apiClient 会自动清除，这里提示用户
-      if (error?.message?.includes("token") || error?.message?.includes("登录")) {
-        window.location.href = "/login";
+    } catch (err) {
+      const message = getErrorMessage(err, "操作失败，请重试。");
+      if (message.includes("token") || message.includes("登录")) {
+        router.push("/login");
       } else {
-        alert("操作失败，请重试");
+        setError(message);
       }
     } finally {
       setFollowLoading(false);
@@ -111,126 +95,122 @@ export default function CommunityPage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse mb-6">
-          <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-        </div>
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 animate-pulse">
-              <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-full"></div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <PageShell>
+        <section className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+          <Skeleton className="h-7 w-48" />
+          <Skeleton className="mt-4 h-4 w-full" />
+          <Skeleton className="mt-2 h-4 w-2/3" />
+        </section>
+        <PostCardSkeleton />
+        <PostCardSkeleton />
+      </PageShell>
     );
   }
 
   if (error && !community) {
     return (
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-          <p className="text-gray-500">{error}</p>
-          {!user && (
-            <Link href="/login" className="text-primary hover:underline mt-4 inline-block">
-              去登录
+      <PageShell>
+        <EmptyState
+          title="社区加载失败"
+          description={error}
+          action={
+            <Link
+              href="/"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-white transition hover:bg-primary-dark"
+            >
+              返回首页
             </Link>
-          )}
-          <Link href="/" className="text-primary hover:underline mt-4 inline-block ml-4">
-            返回首页
-          </Link>
-        </div>
-      </div>
+          }
+        />
+      </PageShell>
     );
   }
 
   if (!community) {
     return (
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-          <p className="text-gray-500">社区不存在</p>
-          <Link href="/" className="text-primary hover:underline mt-4 inline-block">
-            返回首页
-          </Link>
-        </div>
-      </div>
+      <PageShell>
+        <EmptyState title="社区不存在" description="这个社区可能已经被移除，或者链接不正确。" />
+      </PageShell>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Community Header */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {community.name}
-            </h1>
-            <p className="text-gray-600 mb-4">{community.introduction}</p>
-            <div className="flex items-center space-x-4 text-sm text-gray-500">
-              <span className="flex items-center">
-                <Users className="h-4 w-4 mr-1" />
-                社区成员
-              </span>
-              <span className="flex items-center">
-                <Calendar className="h-4 w-4 mr-1" />
-                创建于 {community.create_time}
-              </span>
+    <PageShell>
+      <section className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
+        <div className="h-24 bg-gradient-to-r from-teal-700 via-teal-600 to-amber-500" />
+        <div className="p-5">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="-mt-12 mb-4 flex h-16 w-16 items-center justify-center rounded-lg border-4 border-surface bg-primary text-2xl font-bold text-white shadow-sm">
+                {community.name.slice(0, 1).toUpperCase()}
+              </div>
+              <h1 className="text-2xl font-bold text-foreground">{community.name}</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-strong">
+                {community.introduction || "这个社区还没有介绍。"}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3 text-sm text-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <Users className="h-4 w-4" />
+                  社区成员
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4" />
+                  创建于 {formatDate(community.create_time)}
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="flex flex-col items-end space-y-2">
-            {/* Follow Button */}
-            {user && (
-              <button
-                onClick={handleFollowToggle}
-                disabled={followLoading}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium transition-all ${
-                  isFollowed
-                    ? "bg-primary text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                } disabled:opacity-60`}
-              >
-                <Heart
-                  className={`h-4 w-4 ${
-                    isFollowed ? "fill-current" : ""
-                  }`}
-                />
-                <span>{isFollowed ? "已关注" : "关注"}</span>
-              </button>
-            )}
-            {/* Create Post Button */}
-            {user ? (
+
+            <div className="flex shrink-0 gap-2">
+              {user ? (
+                <Button
+                  variant={isFollowed ? "primary" : "outline"}
+                  onClick={handleFollowToggle}
+                  disabled={followLoading}
+                  className={cn(isFollowed && "bg-primary")}
+                >
+                  <Heart className={cn("h-4 w-4", isFollowed && "fill-current")} />
+                  {isFollowed ? "已关注" : "关注"}
+                </Button>
+              ) : (
+                <Link
+                  href="/login"
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-surface px-4 text-sm font-medium text-muted-strong transition hover:bg-surface-soft"
+                >
+                  登录后关注
+                </Link>
+              )}
               <Link
                 href="/submit"
-                className="bg-primary hover:bg-primary-light text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white transition hover:bg-primary-dark"
               >
+                <PenLine className="h-4 w-4" />
                 发帖
               </Link>
-            ) : (
-              <Link
-                href="/login"
-                className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                登录后发帖
-              </Link>
-            )}
+            </div>
           </div>
         </div>
+      </section>
+
+      {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger">{error}</div> : null}
+
+      <div className="space-y-3">
+        {posts.length > 0 ? posts.map((post) => <PostCard key={post.post_id} post={post} />) : null}
       </div>
 
-      {/* Posts List */}
-      <div className="space-y-4">
-        {posts.length > 0 ? (
-          posts.map((post) => <PostCard key={post.post_id} post={post} />)
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-            <p className="text-gray-500">暂无帖子</p>
-          </div>
-        )}
-      </div>
-    </div>
+      {posts.length === 0 ? (
+        <EmptyState
+          title="这个社区还没有帖子"
+          description="发起第一个话题，让这里热闹起来。"
+          action={
+            <Link
+              href="/submit"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-white transition hover:bg-primary-dark"
+            >
+              发布帖子
+            </Link>
+          }
+        />
+      ) : null}
+    </PageShell>
   );
 }

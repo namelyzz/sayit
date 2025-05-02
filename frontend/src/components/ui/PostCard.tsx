@@ -1,83 +1,69 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowBigUp, ArrowBigDown, MessageSquare, Share2 } from "lucide-react";
+import { ArrowDown, ArrowUp, MessageSquare, Share2 } from "lucide-react";
+import type { PostListItem } from "@/lib/api";
+import { formatCount, formatDateTime } from "@/lib/format";
 
 interface PostCardProps {
-  post: {
-    post_id: string;
-    title: string;
-    summary: string;
-    user_name: string;
-    community_id: string;
-    community_name: string;
-    create_time: string;
-    like_count: number;
-    comment_count: number;
-  };
+  post: PostListItem;
 }
 
 export default function PostCard({ post }: PostCardProps) {
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-      <div className="flex">
-        {/* Vote Buttons */}
-        <div className="flex flex-col items-center p-3 bg-gray-50 rounded-l-lg">
-          <button className="p-1 hover:bg-gray-200 rounded transition-colors">
-            <ArrowBigUp className="h-6 w-6 text-gray-500 hover:text-primary" />
+    <article className="group rounded-lg border border-border bg-surface p-4 shadow-sm transition hover:border-border-strong hover:shadow-md">
+      <div className="flex gap-4">
+        <div className="hidden w-11 shrink-0 flex-col items-center rounded-lg bg-surface-soft py-2 text-muted-strong sm:flex">
+          <button className="rounded-md p-1 transition hover:bg-surface hover:text-primary" aria-label="赞同">
+            <ArrowUp className="h-4 w-4" />
           </button>
-          <span className="text-sm font-bold text-gray-700 my-1">
-            {post.like_count}
-          </span>
-          <button className="p-1 hover:bg-gray-200 rounded transition-colors">
-            <ArrowBigDown className="h-6 w-6 text-gray-500 hover:text-red-500" />
+          <span className="my-1 text-sm font-bold text-foreground">{formatCount(post.like_count)}</span>
+          <button className="rounded-md p-1 transition hover:bg-surface hover:text-danger" aria-label="反对">
+            <ArrowDown className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Post Content */}
-        <div className="flex-1 p-4">
-          {/* Meta Info */}
-          <div className="flex items-center text-sm text-gray-500 mb-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
             <Link
               href={`/community/${post.community_id}`}
-              className="font-medium text-primary hover:underline"
+              className="font-semibold text-primary transition hover:text-primary-dark"
             >
-              {post.community_name}
+              {post.community_name || "未命名社区"}
             </Link>
-            <span className="mx-2">•</span>
-            <span>发布者: {post.user_name}</span>
-            <span className="mx-2">•</span>
-            <span>{post.create_time}</span>
+            <span>由 {post.user_name || "匿名用户"} 发布</span>
+            <span>{formatDateTime(post.create_time)}</span>
           </div>
 
-          {/* Title */}
-          <Link href={`/post/${post.post_id}`}>
-            <h2 className="text-lg font-semibold text-gray-900 hover:text-primary transition-colors mb-2">
-              {post.title}
+          <Link href={`/post/${post.post_id}`} className="mt-2 block">
+            <h2 className="line-clamp-2 text-lg font-semibold leading-7 text-foreground transition group-hover:text-primary">
+              {post.title || "无标题帖子"}
             </h2>
           </Link>
 
-          {/* Summary */}
-          <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-            {post.summary}
-          </p>
+          {post.summary ? (
+            <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-strong">{post.summary}</p>
+          ) : null}
 
-          {/* Actions */}
-          <div className="flex items-center space-x-4 text-sm text-gray-500">
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted">
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-surface-soft px-2.5 font-medium sm:hidden">
+              <ArrowUp className="h-4 w-4 text-primary" />
+              {formatCount(post.like_count)}
+            </span>
             <Link
               href={`/post/${post.post_id}`}
-              className="flex items-center space-x-1 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 font-medium transition hover:bg-surface-soft hover:text-foreground"
             >
               <MessageSquare className="h-4 w-4" />
-              <span>{post.comment_count} 评论</span>
+              {formatCount(post.comment_count)} 条评论
             </Link>
-            <button className="flex items-center space-x-1 hover:bg-gray-100 px-2 py-1 rounded transition-colors">
+            <button className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 font-medium transition hover:bg-surface-soft hover:text-foreground">
               <Share2 className="h-4 w-4" />
-              <span>分享</span>
+              分享
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </article>
   );
 }
