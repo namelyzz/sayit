@@ -45,7 +45,11 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 function SectionBlock({ children }: { children: React.ReactNode }) {
-  return <section className="rounded-xl bg-white/24 p-3">{children}</section>;
+  return (
+    <section className="rounded-xl border border-white/55 bg-white/42 p-3 shadow-[0_10px_26px_rgba(69,123,157,0.08)] backdrop-blur-sm">
+      {children}
+    </section>
+  );
 }
 
 export default function Sidebar() {
@@ -136,8 +140,8 @@ export default function Sidebar() {
               <SectionTitle>我的社区</SectionTitle>
               {followedLoading ? (
                 <div className="space-y-2 px-3">
-                  <div className="h-9 animate-pulse rounded-lg bg-white/40" />
-                  <div className="h-9 animate-pulse rounded-lg bg-white/40" />
+                  <div className="h-9 animate-pulse rounded-lg bg-white/55" />
+                  <div className="h-9 animate-pulse rounded-lg bg-white/55" />
                 </div>
               ) : followedCommunities.length > 0 ? (
                 <div className="space-y-1">
@@ -163,9 +167,9 @@ export default function Sidebar() {
             <SectionTitle>热门社区</SectionTitle>
             {hotLoading ? (
               <div className="space-y-2 px-3">
-                <div className="h-9 animate-pulse rounded-lg bg-white/40" />
-                <div className="h-9 animate-pulse rounded-lg bg-white/40" />
-                <div className="h-9 animate-pulse rounded-lg bg-white/40" />
+                <div className="h-9 animate-pulse rounded-lg bg-white/55" />
+                <div className="h-9 animate-pulse rounded-lg bg-white/55" />
+                <div className="h-9 animate-pulse rounded-lg bg-white/55" />
               </div>
             ) : hotCommunities.length > 0 ? (
               <div className="space-y-1">
