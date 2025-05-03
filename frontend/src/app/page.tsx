@@ -67,12 +67,11 @@ export default function Home() {
 
   return (
     <PageShell>
-      <section className="rounded-lg border border-border bg-surface p-5 shadow-sm">
+      <section className="rounded-lg border border-border bg-surface p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-primary">全站信息流</p>
-            <h1 className="mt-1 text-2xl font-bold text-foreground">今天大家在聊什么</h1>
-            <p className="mt-2 text-sm text-muted">按时间或热度浏览社区里的新想法。</p>
+            <h1 className="text-2xl font-bold text-foreground">今天大家在聊什么</h1>
+            <p className="mt-2 text-sm text-muted-strong">按时间或热度浏览社区里的新想法。</p>
           </div>
           <Link
             href="/submit"
@@ -91,7 +90,7 @@ export default function Home() {
             }}
             className={cn(
               "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition",
-              sortBy === "create_time" ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"
+              sortBy === "create_time" ? "bg-surface text-foreground" : "text-muted hover:text-foreground"
             )}
           >
             <Clock3 className="h-4 w-4" />
@@ -104,7 +103,7 @@ export default function Home() {
             }}
             className={cn(
               "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition",
-              sortBy === "score" ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"
+              sortBy === "score" ? "bg-surface text-foreground" : "text-muted hover:text-foreground"
             )}
           >
             <Flame className="h-4 w-4" />

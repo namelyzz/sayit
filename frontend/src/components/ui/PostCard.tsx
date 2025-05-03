@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, MessageSquare, Share2 } from "lucide-react";
 import type { PostListItem } from "@/lib/api";
 import { formatCount, formatDateTime } from "@/lib/format";
+import CommunityBadge from "@/components/ui/CommunityBadge";
 
 interface PostCardProps {
   post: PostListItem;
@@ -11,7 +12,7 @@ interface PostCardProps {
 
 export default function PostCard({ post }: PostCardProps) {
   return (
-    <article className="group rounded-lg border border-border bg-surface p-4 shadow-sm transition hover:border-border-strong hover:shadow-md">
+    <article className="group rounded-lg border border-border bg-surface p-4 shadow-[0_6px_18px_rgba(69,123,157,0.10)] transition hover:border-border-strong hover:shadow-[0_10px_24px_rgba(69,123,157,0.14)]">
       <div className="flex gap-4">
         <div className="hidden w-11 shrink-0 flex-col items-center rounded-lg bg-surface-soft py-2 text-muted-strong sm:flex">
           <button className="rounded-md p-1 transition hover:bg-surface hover:text-primary" aria-label="赞同">
@@ -24,13 +25,12 @@ export default function PostCard({ post }: PostCardProps) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-            <Link
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-muted">
+            <CommunityBadge
+              id={post.community_id}
+              name={post.community_name}
               href={`/community/${post.community_id}`}
-              className="font-semibold text-primary transition hover:text-primary-dark"
-            >
-              {post.community_name || "未命名社区"}
-            </Link>
+            />
             <span>由 {post.user_name || "匿名用户"} 发布</span>
             <span>{formatDateTime(post.create_time)}</span>
           </div>
