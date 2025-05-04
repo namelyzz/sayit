@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Compass, Home, LogIn, LogOut, PenLine, Search, UserRound } from "lucide-react";
+import { Bell, Compass, Home, LogIn, LogOut, PenLine, Search } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ const mobileLinks = [
 export default function Navbar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const avatarText = user?.user_name?.slice(0, 1).toUpperCase() || "S";
 
   return (
     <>
@@ -61,15 +62,24 @@ export default function Navbar() {
             </Link>
 
             {user ? (
-              <div className="hidden items-center gap-2 md:flex">
+              <div className="flex items-center gap-2">
                 <Link
                   href={`/user/${user.user_id}`}
-                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/45 px-3 text-sm font-medium text-slate-900 transition hover:bg-white/60"
+                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/45 px-2.5 pr-3 text-sm font-medium text-slate-900 transition hover:bg-white/60"
+                  aria-label="进入用户管理页面"
                 >
-                  <UserRound className="h-4 w-4" />
-                  {user.user_name}
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">
+                    {avatarText}
+                  </span>
+                  <span className="hidden max-w-28 truncate md:inline">{user.user_name}</span>
                 </Link>
-                <Button variant="ghost" size="icon" onClick={logout} className="text-slate-800 hover:bg-white/35" aria-label="退出登录">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={logout}
+                  className="hidden text-slate-800 hover:bg-white/35 md:inline-flex"
+                  aria-label="退出登录"
+                >
                   <LogOut className="h-5 w-5" />
                 </Button>
               </div>

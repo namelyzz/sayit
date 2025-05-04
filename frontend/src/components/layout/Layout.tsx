@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
 import RightSidebar from "./RightSidebar";
@@ -16,6 +17,10 @@ export default function Layout({
   showSidebar = true,
   showRightSidebar = true,
 }: LayoutProps) {
+  const pathname = usePathname();
+  const isUserPage = pathname.startsWith("/user/");
+  const shouldShowRightSidebar = showRightSidebar && !isUserPage;
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto min-h-screen max-w-[1440px] bg-chrome">
@@ -25,9 +30,15 @@ export default function Layout({
           {showSidebar ? <Sidebar /> : null}
 
           <div className="min-w-0 bg-background px-4 pb-24 pt-5 md:px-6 lg:min-h-[calc(100vh-4rem)] lg:rounded-tl-[24px] lg:pb-10">
-            <div className="mx-auto grid w-full max-w-[1104px] gap-6 xl:grid-cols-[minmax(0,760px)_320px]">
+            <div
+              className={`mx-auto grid w-full gap-6 ${
+                shouldShowRightSidebar
+                  ? "max-w-[1104px] xl:grid-cols-[minmax(0,760px)_320px]"
+                  : "max-w-[1120px]"
+              }`}
+            >
               <main className="min-w-0">{children}</main>
-              {showRightSidebar ? <RightSidebar /> : null}
+              {shouldShowRightSidebar ? <RightSidebar /> : null}
             </div>
           </div>
         </div>

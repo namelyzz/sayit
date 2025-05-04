@@ -11,6 +11,18 @@ export function formatDate(input?: string) {
   }).format(date);
 }
 
+export function formatShortDate(input?: string) {
+  if (!input) return "无";
+
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return input;
+
+  const year = String(date.getFullYear()).slice(-2);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function formatDateTime(input?: string) {
   if (!input) return "刚刚";
 
