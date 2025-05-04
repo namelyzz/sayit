@@ -22,54 +22,19 @@ import { PostCardSkeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
 import { apiClient, type PostListItem, type PostsResponse } from "@/lib/api";
 import { formatCount, formatDateTime, formatShortDate } from "@/lib/format";
+import {
+  DEFAULT_SIGNATURE,
+  PREVIEW_REGISTER_DATE,
+  previewComments,
+  previewFollowers,
+  previewFollowing,
+  type PreviewPerson,
+} from "@/lib/user-preview";
 import { cn, getErrorMessage } from "@/lib/utils";
 
 type ProfileListType = "followers" | "following" | null;
 
-interface PreviewPerson {
-  id: string;
-  name: string;
-  note: string;
-}
-
-interface PreviewComment {
-  id: string;
-  postTitle: string;
-  excerpt: string;
-  createdAt: string;
-}
-
 const SIGNATURE_STORAGE_PREFIX = "sayit:profile-signature:";
-const DEFAULT_SIGNATURE = "把有意思的想法慢慢晒出来。";
-const PREVIEW_REGISTER_DATE = "2024-08-18T10:00:00+08:00";
-
-const previewFollowers: PreviewPerson[] = [
-  { id: "f-101", name: "南风", note: "喜欢你写的社区观察。" },
-  { id: "f-102", name: "阿宁", note: "经常来看看你的新帖子。" },
-  { id: "f-103", name: "清和", note: "关注了你的创作分享。" },
-];
-
-const previewFollowing: PreviewPerson[] = [
-  { id: "g-201", name: "北岛", note: "经常更新技术随笔。" },
-  { id: "g-202", name: "晚舟", note: "擅长写很有温度的生活记录。" },
-];
-
-const previewComments: PreviewComment[] = [
-  {
-    id: "c-301",
-    postTitle: "如果只保留一个日常习惯，你会留下什么？",
-    excerpt:
-      "我大概率会留下散步。它不像效率工具，更像帮人把脑子里的噪音慢慢放掉。",
-    createdAt: "2026-05-10T20:15:00+08:00",
-  },
-  {
-    id: "c-302",
-    postTitle: "中文社区产品应该更像论坛还是轻社交？",
-    excerpt:
-      "我更倾向于先把讨论质量做稳，再慢慢叠加关系链，不然首页很容易被节奏带偏。",
-    createdAt: "2026-05-08T09:40:00+08:00",
-  },
-];
 
 function normalizePosts(data: PostsResponse | PostListItem[] | undefined) {
   if (!data) return [] as PostListItem[];
@@ -129,9 +94,7 @@ function PeopleDialog({
 }) {
   const title = type === "followers" ? "粉丝列表" : "关注列表";
   const description =
-    type === "followers"
-      ? "这些用户关注了你。"
-      : "这些是你正在关注的用户。";
+    type === "followers" ? "这些用户关注了你。" : "这些是你正在关注的用户。";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm">
@@ -347,7 +310,11 @@ export default function UserManagementPage() {
           </div>
         </section>
 
-        {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger">{error}</div> : null}
+        {error ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger">
+            {error}
+          </div>
+        ) : null}
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
@@ -373,9 +340,7 @@ export default function UserManagementPage() {
                     placeholder="写一句让别人认识你的话。"
                   />
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm text-muted">
-                      当前为前端预览版，签名会先保存在本地浏览器。
-                    </p>
+                    <p className="text-sm text-muted">当前为前端预览版，签名会先保存在本地浏览器。</p>
                     <Button onClick={handleSaveSignature}>
                       <PencilLine className="h-4 w-4" />
                       保存签名

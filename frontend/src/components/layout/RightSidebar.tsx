@@ -1,45 +1,100 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Award, MessageSquareText, PenLine, ShieldCheck, UserRound } from "lucide-react";
+import { Award, ChevronRight, MessageSquareText, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Badge from "@/components/ui/Badge";
+import { apiClient, type PostListItem, type PostsResponse } from "@/lib/api";
+import { formatCount } from "@/lib/format";
+import { previewFollowing } from "@/lib/user-preview";
+
+function normalizePosts(data: PostsResponse | PostListItem[] | undefined) {
+  if (!data) return [] as PostListItem[];
+  return Array.isArray(data) ? data : data.list ?? [];
+}
+
+function StatCard({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="rounded-lg bg-surface-soft p-3 text-center">
+      <p className="text-lg font-bold text-foreground">{value}</p>
+      <p className="mt-1 text-xs text-muted">{label}</p>
+    </div>
+  );
+}
 
 export default function RightSidebar() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const [posts, setPosts] = useState<PostListItem[]>([]);
+
+  useEffect(() => {
+    if (authLoading || !user) {
+      if (!user) setPosts([]);
+      return;
+    }
+
+    const fetchPosts = async () => {
+      try {
+        const response = await apiClient.getPosts({
+          page: 1,
+          size: 50,
+          sort_by: "create_time",
+          order: "desc",
+        });
+        const allPosts = normalizePosts(response.data);
+        setPosts(allPosts.filter((post) => post.user_name === user.user_name));
+      } catch {
+        setPosts([]);
+      }
+    };
+
+    fetchPosts();
+  }, [authLoading, user]);
+
+  const stats = useMemo(() => {
+    const postCount = posts.length;
+    const totalScore = posts.reduce((sum, post) => sum + (post.like_count ?? 0), 0);
+    return {
+      postCount,
+      totalScore,
+      followingCount: previewFollowing.length,
+    };
+  }, [posts]);
 
   return (
-    <aside className="sticky top-21 hidden h-[calc(100vh-5.25rem)] overflow-y-auto xl:block scrollbar-thin">
+    <aside className="sticky top-5 hidden h-[calc(100vh-1.25rem)] overflow-y-auto xl:block scrollbar-thin">
       <div className="space-y-4">
         <section className="rounded-lg border border-border bg-surface p-5 shadow-sm">
           {user ? (
             <>
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-white">
-                  <UserRound className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-base font-semibold text-foreground">{user.user_name}</p>
-                  <p className="truncate text-xs text-muted">ID {user.user_id}</p>
-                </div>
-              </div>
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <div className="rounded-lg bg-surface-soft p-3">
-                  <p className="text-lg font-bold text-foreground">0</p>
-                  <p className="text-xs text-muted">发布</p>
-                </div>
-                <div className="rounded-lg bg-surface-soft p-3">
-                  <p className="text-lg font-bold text-foreground">0</p>
-                  <p className="text-xs text-muted">关注者</p>
-                </div>
-              </div>
               <Link
-                href="/submit"
-                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-white transition hover:bg-primary-dark"
+                href={`/user/${user.user_id}`}
+                className="group block rounded-lg border border-transparent p-1 transition hover:border-border hover:bg-surface-soft/70"
+                aria-label="进入个人中心"
+                title="进入个人中心"
               >
-                <PenLine className="h-4 w-4" />
-                写一篇帖子
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-white ring-2 ring-white shadow-sm transition group-hover:scale-[1.03]">
+                    <span className="text-lg font-semibold">{user.user_name.slice(0, 1).toUpperCase()}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-base font-semibold text-foreground">{user.user_name}</p>
+                      <span className="inline-flex items-center rounded-md bg-[#457b9d]/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                        个人中心
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted">点击头像或昵称进入管理页面</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-primary" />
+                </div>
               </Link>
+
+              <div className="mt-5 grid grid-cols-3 gap-3">
+                <StatCard value={formatCount(stats.postCount)} label="发布" />
+                <StatCard value={formatCount(stats.totalScore)} label="分数" />
+                <StatCard value={formatCount(stats.followingCount)} label="关注" />
+              </div>
             </>
           ) : (
             <>
