@@ -71,3 +71,34 @@ func GetUserByID(userID int64) (user *models.User, err error) {
 	}
 	return user, nil
 }
+
+// GetUserProfileByID 根据用户ID查询用户公开资料，不返回密码等敏感字段。
+func GetUserProfileByID(userID int64) (user *models.User, err error) {
+	user = new(models.User)
+	res := db.Model(&models.User{}).
+		Select("user_id", "username", "signature", "create_time").
+		Where("user_id = ?", userID).
+		First(user)
+
+	if res.Error == gorm.ErrRecordNotFound {
+		return nil, api.ErrorUserNotExist
+	}
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return user, nil
+}
+
+// UpdateUserSignature 更新用户个性签名。
+func UpdateUserSignature(userID int64, signature string) error {
+	res := db.Model(&models.User{}).
+		Where("user_id = ?", userID).
+		Update("signature", signature)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return api.ErrorUserNotExist
+	}
+	return nil
+}

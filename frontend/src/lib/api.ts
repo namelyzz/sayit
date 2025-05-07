@@ -11,6 +11,16 @@ export interface UserSummary {
   user_name: string;
 }
 
+export interface UserProfile {
+  user_id: string;
+  user_name: string;
+  signature: string;
+  create_time: string;
+  post_count: number;
+  post_score: number;
+  is_self: boolean;
+}
+
 export interface CommunitySummary {
   community_id: string;
   name: string;
@@ -145,6 +155,21 @@ class ApiClient {
     return response;
   }
 
+  async getUserProfile(id: string) {
+    return this.request<UserProfile>(`/users/${id}`);
+  }
+
+  async getMe() {
+    return this.request<UserProfile>("/me");
+  }
+
+  async updateMe(signature: string) {
+    return this.request<UserProfile>("/me", {
+      method: "PATCH",
+      body: JSON.stringify({ signature }),
+    });
+  }
+
   async getCommunities() {
     return this.request<CommunitySummary[]>("/community");
   }
@@ -189,6 +214,7 @@ class ApiClient {
     page?: number;
     size?: number;
     community_id?: string;
+    user_name?: string;
     sort_by?: string;
     order?: string;
   }) {
@@ -196,6 +222,7 @@ class ApiClient {
     if (params?.page) searchParams.set("page", params.page.toString());
     if (params?.size) searchParams.set("size", params.size.toString());
     if (params?.community_id) searchParams.set("community_id", params.community_id);
+    if (params?.user_name) searchParams.set("user_name", params.user_name);
     if (params?.sort_by) searchParams.set("sort_by", params.sort_by);
     if (params?.order) searchParams.set("order", params.order);
 

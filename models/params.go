@@ -22,6 +22,11 @@ type ParamLogin struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// ParamUpdateProfile 更新当前用户资料请求参数
+type ParamUpdateProfile struct {
+	Signature string `json:"signature" binding:"max=120"`
+}
+
 /*
 定义排序字段和方向的枚举类型
 */

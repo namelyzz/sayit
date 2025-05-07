@@ -4,6 +4,7 @@ CREATE TABLE `users` (
                         `user_id` bigint(20) NOT NULL,
                         `username` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
                         `password` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
+                        `signature` varchar(240) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '',
                         `email` varchar(64) COLLATE utf8mb4_general_ci,
                         `gender` tinyint(4) NOT NULL DEFAULT '0',
                         `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,

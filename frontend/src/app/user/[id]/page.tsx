@@ -15,16 +15,14 @@ import {
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
+import { Textarea } from "@/components/ui/Field";
 import PageShell from "@/components/ui/PageShell";
 import PostCard from "@/components/ui/PostCard";
-import { Textarea } from "@/components/ui/Field";
 import { PostCardSkeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
-import { apiClient, type PostListItem, type PostsResponse } from "@/lib/api";
+import { apiClient, type PostListItem, type PostsResponse, type UserProfile } from "@/lib/api";
 import { formatCount, formatDateTime, formatShortDate } from "@/lib/format";
 import {
-  DEFAULT_SIGNATURE,
-  PREVIEW_REGISTER_DATE,
   previewComments,
   previewFollowers,
   previewFollowing,
@@ -33,8 +31,6 @@ import {
 import { cn, getErrorMessage } from "@/lib/utils";
 
 type ProfileListType = "followers" | "following" | null;
-
-const SIGNATURE_STORAGE_PREFIX = "sayit:profile-signature:";
 
 function normalizePosts(data: PostsResponse | PostListItem[] | undefined) {
   if (!data) return [] as PostListItem[];
@@ -139,61 +135,54 @@ export default function UserManagementPage() {
   const profileId = params.id as string;
   const { user, loading: authLoading } = useAuth();
 
-  const isSelf = user?.user_id === profileId;
-  const [signature, setSignature] = useState(DEFAULT_SIGNATURE);
-  const [saved, setSaved] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [error, setError] = useState("");
+  const [signatureDraft, setSignatureDraft] = useState("");
+  const [savingSignature, setSavingSignature] = useState(false);
+  const [signatureSaved, setSignatureSaved] = useState(false);
   const [activeList, setActiveList] = useState<ProfileListType>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const stored = window.localStorage.getItem(`${SIGNATURE_STORAGE_PREFIX}${profileId}`);
-    setSignature(stored || DEFAULT_SIGNATURE);
-  }, [profileId]);
-
-  useEffect(() => {
     if (authLoading) return;
-    if (!user) {
-      setLoading(false);
-      return;
-    }
 
-    const fetchPosts = async () => {
+    const fetchProfile = async () => {
       setLoading(true);
       setError("");
 
       try {
-        if (!isSelf) {
-          setPosts([]);
-          return;
-        }
+        const profileResponse = await apiClient.getUserProfile(profileId);
+        const nextProfile = profileResponse.data;
+        setProfile(nextProfile);
+        setSignatureDraft(nextProfile.signature);
 
-        const response = await apiClient.getPosts({
+        const postsResponse = await apiClient.getPosts({
           page: 1,
           size: 50,
+          user_name: nextProfile.user_name,
           sort_by: "create_time",
           order: "desc",
         });
-        const allPosts = normalizePosts(response.data);
-        setPosts(allPosts.filter((post) => post.user_name === user.user_name));
+        setPosts(normalizePosts(postsResponse.data));
       } catch (err) {
-        setError(getErrorMessage(err, "用户帖子加载失败，请稍后再试。"));
+        setError(getErrorMessage(err, "用户资料加载失败，请稍后再试。"));
+        setProfile(null);
         setPosts([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPosts();
-  }, [authLoading, isSelf, user]);
+    fetchProfile();
+  }, [authLoading, profileId]);
 
-  const postCount = posts.length;
+  const isSelf = Boolean(profile?.is_self || user?.user_id === profileId);
+  const postCount = profile?.post_count ?? posts.length;
   const latestPostTime = posts[0]?.create_time;
-  const postScore = posts.reduce((sum, post) => sum + (post.like_count ?? 0), 0);
-  const displayName = isSelf ? user?.user_name ?? "我的账号" : `用户 ${profileId.slice(0, 6)}`;
+  const postScore = profile?.post_score ?? posts.reduce((sum, post) => sum + (post.like_count ?? 0), 0);
+  const displayName = profile?.user_name ?? (isSelf ? user?.user_name ?? "我的账号" : `用户 ${profileId.slice(0, 6)}`);
+  const signature = profile?.signature ?? "这个人很懒，还没有留下签名。";
   const avatarText = displayName.slice(0, 1).toUpperCase();
   const people = activeList === "followers" ? previewFollowers : previewFollowing;
 
@@ -201,7 +190,7 @@ export default function UserManagementPage() {
     () => [
       {
         label: "注册时间",
-        value: formatShortDate(PREVIEW_REGISTER_DATE),
+        value: profile?.create_time ? formatShortDate(profile.create_time) : "加载中",
         icon: <CalendarDays className="h-4 w-4" />,
       },
       {
@@ -215,34 +204,26 @@ export default function UserManagementPage() {
         icon: <Heart className="h-4 w-4" />,
       },
     ],
-    [latestPostTime, postScore]
+    [latestPostTime, postScore, profile?.create_time]
   );
 
-  const handleSaveSignature = () => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(`${SIGNATURE_STORAGE_PREFIX}${profileId}`, signature.trim() || DEFAULT_SIGNATURE);
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 1800);
-  };
+  const handleSaveSignature = async () => {
+    setSavingSignature(true);
+    setSignatureSaved(false);
+    setError("");
 
-  if (!authLoading && !user) {
-    return (
-      <PageShell className="!max-w-4xl">
-        <EmptyState
-          title="登录后查看个人中心"
-          description="这里会展示你的粉丝、关注、帖子和最新评论。"
-          action={
-            <Link
-              href="/login"
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-white transition hover:bg-primary-dark"
-            >
-              去登录
-            </Link>
-          }
-        />
-      </PageShell>
-    );
-  }
+    try {
+      const response = await apiClient.updateMe(signatureDraft);
+      setProfile(response.data);
+      setSignatureDraft(response.data.signature);
+      setSignatureSaved(true);
+      window.setTimeout(() => setSignatureSaved(false), 1800);
+    } catch (err) {
+      setError(getErrorMessage(err, "签名保存失败，请稍后再试。"));
+    } finally {
+      setSavingSignature(false);
+    }
+  };
 
   return (
     <>
@@ -267,7 +248,7 @@ export default function UserManagementPage() {
                     </div>
                     <p className="mt-2 text-sm text-muted">ID {profileId}</p>
                     <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-strong">
-                      {signature.trim() || DEFAULT_SIGNATURE}
+                      {signature}
                     </p>
                   </div>
                 </div>
@@ -328,28 +309,34 @@ export default function UserManagementPage() {
 
             <SectionCard
               title="个性签名"
-              extra={saved ? <span className="text-xs font-medium text-primary">已保存到本地预览</span> : null}
+              extra={
+                signatureSaved ? (
+                  <span className="text-xs font-medium text-primary">已保存</span>
+                ) : (
+                  <span className="text-xs font-medium text-muted">来自后端资料</span>
+                )
+              }
             >
               {isSelf ? (
                 <div className="space-y-4">
                   <Textarea
                     rows={4}
                     maxLength={120}
-                    value={signature}
-                    onChange={(event) => setSignature(event.target.value)}
+                    value={signatureDraft}
+                    onChange={(event) => setSignatureDraft(event.target.value)}
                     placeholder="写一句让别人认识你的话。"
                   />
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm text-muted">当前为前端预览版，签名会先保存在本地浏览器。</p>
-                    <Button onClick={handleSaveSignature}>
+                    <p className="text-sm text-muted">最多 120 个字符，保存后会同步到后端资料。</p>
+                    <Button onClick={handleSaveSignature} disabled={savingSignature || !profile}>
                       <PencilLine className="h-4 w-4" />
-                      保存签名
+                      {savingSignature ? "保存中" : "保存签名"}
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div className="rounded-lg border border-border bg-surface-soft px-4 py-4 text-sm leading-7 text-muted-strong">
-                  后续接入后端后，这里会展示该用户公开的个性签名。
+                  {signature}
                 </div>
               )}
             </SectionCard>

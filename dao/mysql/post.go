@@ -119,6 +119,20 @@ func GetPostListByIDs(postIDs []int64) (posts []*models.PostListItem, err error)
 	return FilterPostListByIDs(postIDs, nil)
 }
 
+// CountNormalPostsByAuthor 统计用户正常状态的帖子数量。
+func CountNormalPostsByAuthor(authorID int64) (count int64, err error) {
+	res := db.Model(&models.Post{}).
+		Where("author_id = ? AND status = ?", authorID, 1).
+		Count(&count)
+	if res.Error != nil {
+		zap.L().Error("count normal posts by author failed",
+			zap.Int64("author_id", authorID),
+			zap.Error(res.Error))
+		return 0, res.Error
+	}
+	return count, nil
+}
+
 // buildPostListQuery 构建帖子列表的基础查询
 // 三表 JOIN: post + users + community
 // 同时通过 SQL 函数生成内容摘要

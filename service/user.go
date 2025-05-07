@@ -1,11 +1,15 @@
 package service
 
 import (
+	"strings"
+
 	"github.com/namelyzz/sayit/dao/mysql"
 	"github.com/namelyzz/sayit/models"
 	"github.com/namelyzz/sayit/utils/jwt"
 	"github.com/namelyzz/sayit/utils/snowflake"
 )
+
+const defaultUserSignature = "这个人很懒，还没有留下签名。"
 
 // SignUp 用户注册业务逻辑
 // 步骤: 检查用户名是否已存在 -> 生成雪花ID -> 构造用户对象 -> 密码加密后入库
@@ -45,4 +49,41 @@ func Login(p *models.ParamLogin) (user *models.User, err error) {
 	// 3. 将 token 附加到用户对象返回给 controller 层
 	user.Token = token
 	return user, nil
+}
+
+// GetUserProfile 获取用户资料页所需的核心公开信息。
+func GetUserProfile(currentUserID, targetUserID int64) (profile *models.UserProfile, err error) {
+	user, err := mysql.GetUserProfileByID(targetUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	postCount, err := mysql.CountNormalPostsByAuthor(targetUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	signature := user.Signature
+	if signature == "" {
+		signature = defaultUserSignature
+	}
+
+	return &models.UserProfile{
+		UserID:     user.UserID,
+		Username:   user.Username,
+		Signature:  signature,
+		CreateTime: user.CreateTime,
+		PostCount:  postCount,
+		PostScore:  0,
+		IsSelf:     currentUserID == targetUserID,
+	}, nil
+}
+
+// UpdateUserProfile 更新当前登录用户资料，并返回更新后的资料。
+func UpdateUserProfile(userID int64, p *models.ParamUpdateProfile) (*models.UserProfile, error) {
+	signature := strings.TrimSpace(p.Signature)
+	if err := mysql.UpdateUserSignature(userID, signature); err != nil {
+		return nil, err
+	}
+	return GetUserProfile(userID, userID)
 }

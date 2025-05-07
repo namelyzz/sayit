@@ -14,12 +14,13 @@ func SetupRouter(mode string) *gin.Engine {
 	v1 := r.Group("/api/v1")
 
 	// 公开接口（无需 JWT 验证）
-	v1.GET("/hot_communities", controller.HotCommunityHandler)        // 热门社区列表
+	v1.GET("/hot_communities", controller.HotCommunityHandler)       // 热门社区列表
 	v1.GET("/random_communities", controller.RandomCommunityHandler) // 随机推荐社区
 	v1.GET("/community", controller.CommunityHandler)                // 社区列表
 	v1.GET("/community/:id", controller.CommunityDetailHandler)      // 社区详情
 	v1.GET("/posts", controller.GetPostListHandler)                  // 帖子列表
 	v1.GET("/post_detail/:id", controller.GetPostDetailHandler)      // 帖子详情
+	v1.GET("/users/:id", controller.GetUserProfileHandler)           // 用户公开资料
 
 	// 用户模块
 	v1.POST("/signup", controller.SignupHandler) // 注册
@@ -28,6 +29,9 @@ func SetupRouter(mode string) *gin.Engine {
 	v1.Use(middlewares.JWTAuthMiddleware()) // 应用JWT认证中间件
 
 	{
+		v1.GET("/me", controller.GetMeHandler)
+		v1.PATCH("/me", controller.UpdateMeHandler)
+
 		v1.POST("/create_post", controller.CreatePostHandler)
 		v1.POST("/vote", controller.PostVoteController)
 

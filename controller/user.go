@@ -9,6 +9,7 @@ import (
 	"github.com/namelyzz/sayit/utils/api"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"strconv"
 )
 
 // SignupHandler 用户注册接口
@@ -86,4 +87,81 @@ func LoginHandler(c *gin.Context) {
 
 	// 3. 登录成功，返回用户ID、用户名和JWT令牌
 	api.ResponseSuccess(c, user)
+}
+
+// GetUserProfileHandler 获取用户资料页核心公开信息。
+// 路由: GET /api/v1/users/:id
+func GetUserProfileHandler(c *gin.Context) {
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	profile, err := service.GetUserProfile(0, targetUserID)
+	if err != nil {
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
+			return
+		}
+		zap.L().Error("get user profile failed",
+			zap.Int64("target_user_id", targetUserID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, profile)
+}
+
+// GetMeHandler 获取当前登录用户资料。
+// 路由: GET /api/v1/me (需要JWT认证)
+func GetMeHandler(c *gin.Context) {
+	currentUserID, err := api.GetCurrentUserID(c)
+	if err != nil {
+		api.ResponseError(c, api.CodeNeedLogin)
+		return
+	}
+
+	profile, err := service.GetUserProfile(currentUserID, currentUserID)
+	if err != nil {
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
+			return
+		}
+		zap.L().Error("get current user profile failed", zap.Int64("user_id", currentUserID), zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, profile)
+}
+
+// UpdateMeHandler 更新当前登录用户资料。
+// 路由: PATCH /api/v1/me (需要JWT认证)
+func UpdateMeHandler(c *gin.Context) {
+	p := new(models.ParamUpdateProfile)
+	if err := c.ShouldBindJSON(p); err != nil {
+		handleBindError(c, err)
+		return
+	}
+
+	currentUserID, err := api.GetCurrentUserID(c)
+	if err != nil {
+		api.ResponseError(c, api.CodeNeedLogin)
+		return
+	}
+
+	profile, err := service.UpdateUserProfile(currentUserID, p)
+	if err != nil {
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
+			return
+		}
+		zap.L().Error("update current user profile failed", zap.Int64("user_id", currentUserID), zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, profile)
 }
