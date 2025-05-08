@@ -20,6 +20,7 @@ func SetupRouter(mode string) *gin.Engine {
 	v1.GET("/community/:id", controller.CommunityDetailHandler)      // 社区详情
 	v1.GET("/posts", controller.GetPostListHandler)                  // 帖子列表
 	v1.GET("/post_detail/:id", controller.GetPostDetailHandler)      // 帖子详情
+	v1.GET("/users/:id/posts", controller.GetUserPostsHandler)       // 用户发布的帖子
 	v1.GET("/users/:id", controller.GetUserProfileHandler)           // 用户公开资料
 
 	// 用户模块

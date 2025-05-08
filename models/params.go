@@ -59,6 +59,7 @@ type SortCondition struct {
 // form tag 用于 Gin 的 ShouldBindQuery 绑定查询参数
 type ParamPostList struct {
 	CommunityID int64  `json:"community_id" form:"community_id"` // 社区ID筛选（精确匹配）
+	AuthorID    int64  `json:"author_id" form:"author_id"`       // 作者ID筛选（精确匹配）
 	UserName    string `json:"user_name" form:"user_name"`       // 作者名筛选（模糊搜索）
 	Keyword     string `json:"keyword" form:"keyword"`           // 标题关键词筛选（模糊搜索）
 

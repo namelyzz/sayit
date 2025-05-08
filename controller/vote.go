@@ -27,6 +27,7 @@ func PostVoteController(c *gin.Context) {
 	// post_id 为必填，direction 必须是 1、0、-1 之一
 	p := new(models.ParamVote)
 	if err := c.ShouldBindJSON(p); err != nil {
+		zap.L().Warn("vote with invalid param", zap.Error(err))
 		handleBindError(c, err)
 		return
 	}

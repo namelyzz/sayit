@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"strings"
 
 	"github.com/namelyzz/sayit/dao/mysql"
@@ -86,4 +87,13 @@ func UpdateUserProfile(userID int64, p *models.ParamUpdateProfile) (*models.User
 		return nil, err
 	}
 	return GetUserProfile(userID, userID)
+}
+
+// GetUserPosts 获取指定用户发布的帖子列表。
+func GetUserPosts(ctx context.Context, userID int64, p *models.ParamPostList) ([]*models.PostListItem, error) {
+	if _, err := mysql.GetUserProfileByID(userID); err != nil {
+		return nil, err
+	}
+	p.AuthorID = userID
+	return GetPostList(ctx, p)
 }

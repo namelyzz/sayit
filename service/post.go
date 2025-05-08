@@ -254,14 +254,14 @@ func listPostsByScoreWithFilters(ctx context.Context, p *models.ParamPostList) (
 // 条件: 按创建时间排序 + 无作者名过滤 + 无关键词过滤
 // 原因: Redis 时间榜只存储帖子ID和时间戳，不支持作者名和关键词的模糊搜索
 func canUseRedisTimeList(p *models.ParamPostList) bool {
-	return p.SortBy == models.SortFieldCreateTime && p.UserName == "" && p.Keyword == ""
+	return p.SortBy == models.SortFieldCreateTime && p.AuthorID == 0 && p.UserName == "" && p.Keyword == ""
 }
 
 // hasComplexScoreFilters 判断是否有复杂的过滤条件
 // 复杂过滤包括: 作者名、关键词、时间范围
 // 这些条件无法在 Redis 中直接过滤，需要回查 MySQL
 func hasComplexScoreFilters(p *models.ParamPostList) bool {
-	return p.UserName != "" || p.Keyword != "" || p.StartTime != nil || p.EndTime != nil
+	return p.AuthorID != 0 || p.UserName != "" || p.Keyword != "" || p.StartTime != nil || p.EndTime != nil
 }
 
 // fallbackPostListByCreateTime Redis 查询异常时的降级方案

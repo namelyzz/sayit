@@ -230,6 +230,25 @@ class ApiClient {
     return this.request<PostsResponse | PostListItem[]>(`/posts${query ? `?${query}` : ""}`);
   }
 
+  async getUserPosts(
+    id: string,
+    params?: {
+      page?: number;
+      size?: number;
+      sort_by?: string;
+      order?: string;
+    }
+  ) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set("page", params.page.toString());
+    if (params?.size) searchParams.set("size", params.size.toString());
+    if (params?.sort_by) searchParams.set("sort_by", params.sort_by);
+    if (params?.order) searchParams.set("order", params.order);
+
+    const query = searchParams.toString();
+    return this.request<PostsResponse | PostListItem[]>(`/users/${id}/posts${query ? `?${query}` : ""}`);
+  }
+
   async getPostDetail(id: string) {
     return this.request<PostDetail>(`/post_detail/${id}`);
   }
@@ -240,7 +259,7 @@ class ApiClient {
       body: JSON.stringify({
         title,
         content,
-        community_id: communityId,
+        community_id: Number(communityId),
       }),
     });
   }
@@ -250,7 +269,7 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({
         post_id: postId,
-        direction,
+        direction: direction.toString(),
       }),
     });
   }

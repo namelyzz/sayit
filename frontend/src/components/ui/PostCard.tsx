@@ -1,25 +1,58 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowDown, ArrowUp, MessageSquare, Share2 } from "lucide-react";
-import type { PostListItem } from "@/lib/api";
+import { apiClient, type PostListItem } from "@/lib/api";
 import { formatCount, formatDateTime } from "@/lib/format";
 import CommunityBadge from "@/components/ui/CommunityBadge";
+import { cn, getErrorMessage } from "@/lib/utils";
 
 interface PostCardProps {
   post: PostListItem;
 }
 
 export default function PostCard({ post }: PostCardProps) {
+  const [vote, setVote] = useState(0);
+  const [error, setError] = useState("");
+
+  const handleVote = async (direction: number) => {
+    const nextVote = vote === direction ? 0 : direction;
+    setError("");
+
+    try {
+      await apiClient.vote(post.post_id, nextVote);
+      setVote(nextVote);
+    } catch (err) {
+      setError(getErrorMessage(err, "投票失败，请稍后重试。"));
+    }
+  };
+
+  const displayScore = (post.like_count || 0) + vote;
+
   return (
     <article className="group rounded-lg border border-border bg-surface p-4 shadow-[0_6px_18px_rgba(69,123,157,0.10)] transition hover:border-border-strong hover:shadow-[0_10px_24px_rgba(69,123,157,0.14)]">
       <div className="flex gap-4">
         <div className="hidden w-11 shrink-0 flex-col items-center rounded-lg bg-surface-soft py-2 text-muted-strong sm:flex">
-          <button className="rounded-md p-1 transition hover:bg-surface hover:text-primary" aria-label="赞同">
+          <button
+            onClick={() => handleVote(1)}
+            className={cn(
+              "rounded-md p-1 transition hover:bg-surface hover:text-primary",
+              vote === 1 && "bg-primary text-white hover:bg-primary hover:text-white"
+            )}
+            aria-label="赞同"
+          >
             <ArrowUp className="h-4 w-4" />
           </button>
-          <span className="my-1 text-sm font-bold text-foreground">{formatCount(post.like_count)}</span>
-          <button className="rounded-md p-1 transition hover:bg-surface hover:text-danger" aria-label="反对">
+          <span className="my-1 text-sm font-bold text-foreground">{formatCount(displayScore)}</span>
+          <button
+            onClick={() => handleVote(-1)}
+            className={cn(
+              "rounded-md p-1 transition hover:bg-surface hover:text-danger",
+              vote === -1 && "bg-danger text-white hover:bg-danger hover:text-white"
+            )}
+            aria-label="反对"
+          >
             <ArrowDown className="h-4 w-4" />
           </button>
         </div>
@@ -48,7 +81,7 @@ export default function PostCard({ post }: PostCardProps) {
           <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted">
             <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-surface-soft px-2.5 font-medium sm:hidden">
               <ArrowUp className="h-4 w-4 text-primary" />
-              {formatCount(post.like_count)}
+              {formatCount(displayScore)}
             </span>
             <Link
               href={`/post/${post.post_id}`}
@@ -62,6 +95,8 @@ export default function PostCard({ post }: PostCardProps) {
               分享
             </button>
           </div>
+
+          {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
         </div>
       </div>
     </article>

@@ -21,7 +21,7 @@ func CreatePostHandler(c *gin.Context) {
 	// title、content、community_id 通过 binding:"required" 标签强制必填
 	p := new(models.Post)
 	if err := c.ShouldBindJSON(p); err != nil {
-		zap.L().Error("create post with invalid param")
+		zap.L().Error("create post with invalid param", zap.Error(err))
 		api.ResponseError(c, api.CodeInvalidParam)
 		return
 	}

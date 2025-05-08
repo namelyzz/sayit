@@ -48,6 +48,7 @@ const (
 //   - CHAR_LENGTH(p.content) > 30: 判断内容是否超长
 //   - SUBSTRING(p.content, 1, 30): 截取前30个字符
 //   - CONCAT(..., '...'): 拼接后缀
+//
 // 同时 JOIN users 和 community 表获取作者名和社区名
 const postListSelect = `p.post_id, p.title, p.author_id, p.community_id, p.status,
 	p.create_time, p.update_time, u.username AS user_name, c.community_name,
@@ -146,6 +147,7 @@ func buildPostListQuery() *gorm.DB {
 // applyPostListFilters 应用帖子列表的过滤条件
 // 支持的过滤条件:
 //   - CommunityID: 精确匹配社区ID
+//   - AuthorID: 作者ID精确匹配
 //   - UserName: 作者名模糊搜索（LIKE %keyword%）
 //   - Keyword: 标题模糊搜索（LIKE %keyword%）
 //   - StartTime/EndTime: 创建时间范围筛选
@@ -157,6 +159,9 @@ func applyPostListFilters(query *gorm.DB, p *models.ParamPostList) *gorm.DB {
 
 	if p.CommunityID != 0 {
 		query = query.Where("p.community_id = ?", p.CommunityID)
+	}
+	if p.AuthorID != 0 {
+		query = query.Where("p.author_id = ?", p.AuthorID)
 	}
 	if p.UserName != "" {
 		query = query.Where("u.username LIKE ?", "%"+p.UserName+"%")

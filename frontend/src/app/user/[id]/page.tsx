@@ -157,10 +157,9 @@ export default function UserManagementPage() {
         setProfile(nextProfile);
         setSignatureDraft(nextProfile.signature);
 
-        const postsResponse = await apiClient.getPosts({
+        const postsResponse = await apiClient.getUserPosts(profileId, {
           page: 1,
           size: 50,
-          user_name: nextProfile.user_name,
           sort_by: "create_time",
           order: "desc",
         });

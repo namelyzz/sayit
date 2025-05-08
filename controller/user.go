@@ -165,3 +165,48 @@ func UpdateMeHandler(c *gin.Context) {
 
 	api.ResponseSuccess(c, profile)
 }
+
+// GetUserPostsHandler 获取指定用户发布的帖子列表。
+// 路由: GET /api/v1/users/:id/posts
+func GetUserPostsHandler(c *gin.Context) {
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	p := new(models.ParamPostList)
+	if err := c.ShouldBindQuery(p); err != nil {
+		zap.L().Warn("invalid user posts query parameters",
+			zap.Int64("target_user_id", targetUserID),
+			zap.Error(err),
+			zap.Any("params", p))
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	if err := p.ValidateAndSetDefaults(); err != nil {
+		zap.L().Warn("invalid user posts parameters after validation",
+			zap.Int64("target_user_id", targetUserID),
+			zap.Error(err),
+			zap.Any("params", p))
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	posts, err := service.GetUserPosts(c.Request.Context(), targetUserID, p)
+	if err != nil {
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
+			return
+		}
+		zap.L().Error("get user posts failed",
+			zap.Int64("target_user_id", targetUserID),
+			zap.Error(err),
+			zap.Any("params", p))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, posts)
+}
