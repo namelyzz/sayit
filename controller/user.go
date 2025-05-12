@@ -98,7 +98,7 @@ func GetUserProfileHandler(c *gin.Context) {
 		return
 	}
 
-	profile, err := service.GetUserProfile(0, targetUserID)
+	profile, err := service.GetUserProfile(c.Request.Context(), 0, targetUserID)
 	if err != nil {
 		if errors.Is(err, api.ErrorUserNotExist) {
 			api.ResponseError(c, api.CodeUserNotExist)
@@ -123,7 +123,7 @@ func GetMeHandler(c *gin.Context) {
 		return
 	}
 
-	profile, err := service.GetUserProfile(currentUserID, currentUserID)
+	profile, err := service.GetUserProfile(c.Request.Context(), currentUserID, currentUserID)
 	if err != nil {
 		if errors.Is(err, api.ErrorUserNotExist) {
 			api.ResponseError(c, api.CodeUserNotExist)
@@ -152,7 +152,7 @@ func UpdateMeHandler(c *gin.Context) {
 		return
 	}
 
-	profile, err := service.UpdateUserProfile(currentUserID, p)
+	profile, err := service.UpdateUserProfile(c.Request.Context(), currentUserID, p)
 	if err != nil {
 		if errors.Is(err, api.ErrorUserNotExist) {
 			api.ResponseError(c, api.CodeUserNotExist)
@@ -194,7 +194,7 @@ func GetUserPostsHandler(c *gin.Context) {
 		return
 	}
 
-	posts, err := service.GetUserPosts(c.Request.Context(), targetUserID, p)
+	posts, err := service.GetUserPosts(c.Request.Context(), targetUserID, p, api.GetOptionalUserID(c))
 	if err != nil {
 		if errors.Is(err, api.ErrorUserNotExist) {
 			api.ResponseError(c, api.CodeUserNotExist)

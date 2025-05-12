@@ -9,7 +9,7 @@ import (
 // 投票系统常量
 const (
 	oneWeekInSeconds = 7 * 24 * 3600 // 7天的秒数，投票时间窗口
-	scorePerVore     = 432            // 每票的基础分值
+	ScorePerVote     = 432           // 每票的基础分值
 )
 
 // GetPostCreateTime 从 Redis 时间排行榜获取帖子的创建时间戳
@@ -36,6 +36,19 @@ func IsPostCreatedWithinOneWeek(ctx context.Context, postID string) bool {
 // 返回值: 1(赞成), -1(反对), 0(未投过票或记录不存在)
 func GetPostVoteScore(ctx context.Context, postID, userID string) float64 {
 	return client.ZScore(ctx, getRedisKey(KeyPostVotedZsetPF+postID), userID).Val()
+}
+
+// GetPostVoteCount 获取帖子的净投票数（赞成票数 - 反对票数）。
+func GetPostVoteCount(ctx context.Context, postID string) int64 {
+	key := getRedisKey(KeyPostVotedZsetPF + postID)
+	upCount := client.ZCount(ctx, key, "1", "1").Val()
+	downCount := client.ZCount(ctx, key, "-1", "-1").Val()
+	return upCount - downCount
+}
+
+// GetPostVoteValue 获取帖子的投票分值。
+func GetPostVoteValue(ctx context.Context, postID string) int64 {
+	return GetPostVoteCount(ctx, postID) * ScorePerVote
 }
 
 // UpdatePostVote 更新帖子分数与用户投票记录
@@ -87,7 +100,7 @@ func UpdatePostVote(ctx context.Context, userID, postID string, voteVal, operate
 	// Key: sayit:post:score (ZSet)
 	// 计算: 当前分数 + (operate × diff × 432)
 	// 例如: 赞成票 → 分数 +432，反对改赞成 → 分数 +864
-	pipe.ZIncrBy(ctx, getRedisKey(KeyPostScoreZset), operate*diff*scorePerVore, postID)
+	pipe.ZIncrBy(ctx, getRedisKey(KeyPostScoreZset), operate*diff*ScorePerVote, postID)
 
 	// ── 操作2: 更新用户投票记录 ──
 	// Key: sayit:post:voted:<postID> (ZSet)

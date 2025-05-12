@@ -73,7 +73,7 @@ func GetPostDetailHandler(c *gin.Context) {
 	}
 
 	// 3. 调用 service 层查询帖子详情（包含帖子、作者名、社区详情）
-	data, err := service.GetPostDetailByID(postID)
+	data, err := service.GetPostDetailByID(c.Request.Context(), postID, api.GetOptionalUserID(c))
 	if err != nil {
 		zap.L().Error("service.GetPostDetailByID failed", zap.Error(err))
 		api.ResponseError(c, api.CodeServerBusy)
@@ -117,7 +117,7 @@ func GetPostListHandler(c *gin.Context) {
 	}
 
 	// 3. 调用 service 层获取帖子列表（内部会根据排序策略选择 Redis 或 MySQL）
-	data, err := service.GetPostList(c.Request.Context(), p)
+	data, err := service.GetPostListWithViewer(c.Request.Context(), p, api.GetOptionalUserID(c))
 	if err != nil {
 		zap.L().Error("get post list failed",
 			zap.Error(err),

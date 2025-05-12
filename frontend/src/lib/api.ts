@@ -47,7 +47,9 @@ export interface PostListItem {
   community_name: string;
   create_time: string;
   like_count: number;
+  vote_count: number;
   comment_count: number;
+  current_user_vote: number;
 }
 
 export interface PostsResponse {
@@ -67,7 +69,9 @@ export interface PostDetail {
   };
   create_time: string;
   like_count: number;
+  vote_count: number;
   comment_count: number;
+  current_user_vote: number;
 }
 
 class ApiClient {

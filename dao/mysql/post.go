@@ -134,6 +134,21 @@ func CountNormalPostsByAuthor(authorID int64) (count int64, err error) {
 	return count, nil
 }
 
+// GetNormalPostIDsByAuthor 查询用户正常状态帖子ID列表。
+func GetNormalPostIDsByAuthor(authorID int64) ([]int64, error) {
+	var postIDs []int64
+	res := db.Model(&models.Post{}).
+		Where("author_id = ? AND status = ?", authorID, 1).
+		Pluck("post_id", &postIDs)
+	if res.Error != nil {
+		zap.L().Error("get normal post ids by author failed",
+			zap.Int64("author_id", authorID),
+			zap.Error(res.Error))
+		return nil, res.Error
+	}
+	return postIDs, nil
+}
+
 // buildPostListQuery 构建帖子列表的基础查询
 // 三表 JOIN: post + users + community
 // 同时通过 SQL 函数生成内容摘要

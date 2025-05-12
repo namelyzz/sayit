@@ -8,6 +8,7 @@ import (
 	"github.com/namelyzz/sayit/utils/conv"
 	"github.com/namelyzz/sayit/utils/snowflake"
 	"go.uber.org/zap"
+	"strconv"
 	"time"
 )
 
@@ -20,9 +21,9 @@ var (
 
 // CreatePost 创建帖子的业务逻辑
 // 采用 Outbox 模式保证 MySQL 和 Redis 的最终一致性:
-//   1. 在同一个事务中写入帖子记录和 outbox_events 记录
-//   2. 尝试同步处理 outbox 事件（写入 Redis 排行榜）
-//   3. 如果同步失败，后台 OutboxWorker 定时重试
+//  1. 在同一个事务中写入帖子记录和 outbox_events 记录
+//  2. 尝试同步处理 outbox 事件（写入 Redis 排行榜）
+//  3. 如果同步失败，后台 OutboxWorker 定时重试
 //
 // 优点: 即使 Redis 暂时不可用，帖子数据也不会丢失，会由后台任务补偿
 func CreatePost(ctx context.Context, p *models.Post) (err error) {
@@ -62,7 +63,7 @@ func CreatePost(ctx context.Context, p *models.Post) (err error) {
 // GetPostDetailByID 获取帖子详情
 // 查询策略: 分三次 MySQL 查询后组装（非 JOIN），返回完整的帖子详情
 // 包含: 帖子主体 + 作者用户名 + 社区详情
-func GetPostDetailByID(postID int64) (res *models.PostDetail, err error) {
+func GetPostDetailByID(ctx context.Context, postID int64, currentUserID int64) (res *models.PostDetail, err error) {
 	// 1. 查询帖子主体信息
 	post, err := mysql.GetPostByID(postID)
 	if err != nil {
@@ -93,8 +94,17 @@ func GetPostDetailByID(postID int64) (res *models.PostDetail, err error) {
 	}
 
 	// 4. 组装帖子详情返回
+	postIDStr := strconv.FormatInt(postID, 10)
+	currentUserVote := int8(0)
+	if currentUserID != 0 {
+		currentUserVote = int8(redis.GetPostVoteScore(ctx, postIDStr, strconv.FormatInt(currentUserID, 10)))
+	}
+
 	return &models.PostDetail{
 		AuthorName:      user.Username,
+		LikeCount:       redis.GetPostVoteValue(ctx, postIDStr),
+		VoteCount:       redis.GetPostVoteCount(ctx, postIDStr),
+		CurrentUserVote: currentUserVote,
 		Post:            post,
 		CommunityDetail: detail,
 	}, nil
@@ -103,6 +113,32 @@ func GetPostDetailByID(postID int64) (res *models.PostDetail, err error) {
 // GetPostList 获取帖子列表（入口函数，委托给 ListPosts）
 func GetPostList(ctx context.Context, p *models.ParamPostList) (posts []*models.PostListItem, err error) {
 	return ListPosts(ctx, p)
+}
+
+// GetPostListWithViewer 获取帖子列表，并回填投票分数与当前用户投票状态。
+func GetPostListWithViewer(ctx context.Context, p *models.ParamPostList, currentUserID int64) ([]*models.PostListItem, error) {
+	posts, err := ListPosts(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	enrichPostVoteState(ctx, posts, currentUserID)
+	return posts, nil
+}
+
+func enrichPostVoteState(ctx context.Context, posts []*models.PostListItem, currentUserID int64) {
+	userIDStr := ""
+	if currentUserID != 0 {
+		userIDStr = strconv.FormatInt(currentUserID, 10)
+	}
+
+	for _, post := range posts {
+		postIDStr := strconv.FormatInt(int64(post.PostID), 10)
+		post.LikeCount = redis.GetPostVoteValue(ctx, postIDStr)
+		post.VoteCount = redis.GetPostVoteCount(ctx, postIDStr)
+		if userIDStr != "" {
+			post.CurrentUserVote = int8(redis.GetPostVoteScore(ctx, postIDStr, userIDStr))
+		}
+	}
 }
 
 // ListPosts 获取帖子列表的核心调度函数
@@ -203,7 +239,8 @@ func listPostsByScore(ctx context.Context, p *models.ParamPostList) ([]*models.P
 // listPostsByScoreWithFilters 带过滤条件的按分数排序获取帖子列表
 // 使用场景: 有作者名、关键词、时间范围等复杂过滤条件
 // 策略: 从 Redis 批量获取帖子 ID（每批100个），用 MySQL 过滤后累积，
-//       直到收集够当前页所需的帖子数量，再进行分页截取
+//
+//	直到收集够当前页所需的帖子数量，再进行分页截取
 func listPostsByScoreWithFilters(ctx context.Context, p *models.ParamPostList) ([]*models.PostListItem, error) {
 	// 计算目标数量: 需要收集 page*size 个帖子才能正确分页
 	targetCount := p.Page * p.Size

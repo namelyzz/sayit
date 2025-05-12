@@ -179,7 +179,7 @@ export default function UserManagementPage() {
   const isSelf = Boolean(profile?.is_self || user?.user_id === profileId);
   const postCount = profile?.post_count ?? posts.length;
   const latestPostTime = posts[0]?.create_time;
-  const postScore = profile?.post_score ?? posts.reduce((sum, post) => sum + (post.like_count ?? 0), 0);
+  const postHeat = profile?.post_score ?? posts.reduce((sum, post) => sum + (post.like_count ?? 0), 0);
   const displayName = profile?.user_name ?? (isSelf ? user?.user_name ?? "我的账号" : `用户 ${profileId.slice(0, 6)}`);
   const signature = profile?.signature ?? "这个人很懒，还没有留下签名。";
   const avatarText = displayName.slice(0, 1).toUpperCase();
@@ -198,12 +198,12 @@ export default function UserManagementPage() {
         icon: <Clock3 className="h-4 w-4" />,
       },
       {
-        label: "帖子总分",
-        value: formatCount(postScore),
+        label: "帖子热度",
+        value: formatCount(postHeat),
         icon: <Heart className="h-4 w-4" />,
       },
     ],
-    [latestPostTime, postScore, profile?.create_time]
+    [latestPostTime, postHeat, profile?.create_time]
   );
 
   const handleSaveSignature = async () => {

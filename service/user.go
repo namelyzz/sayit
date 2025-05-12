@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/namelyzz/sayit/dao/mysql"
+	"github.com/namelyzz/sayit/dao/redis"
 	"github.com/namelyzz/sayit/models"
 	"github.com/namelyzz/sayit/utils/jwt"
 	"github.com/namelyzz/sayit/utils/snowflake"
@@ -53,13 +55,17 @@ func Login(p *models.ParamLogin) (user *models.User, err error) {
 }
 
 // GetUserProfile 获取用户资料页所需的核心公开信息。
-func GetUserProfile(currentUserID, targetUserID int64) (profile *models.UserProfile, err error) {
+func GetUserProfile(ctx context.Context, currentUserID, targetUserID int64) (profile *models.UserProfile, err error) {
 	user, err := mysql.GetUserProfileByID(targetUserID)
 	if err != nil {
 		return nil, err
 	}
 
 	postCount, err := mysql.CountNormalPostsByAuthor(targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	postScore, err := getUserPostScore(ctx, targetUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -75,25 +81,38 @@ func GetUserProfile(currentUserID, targetUserID int64) (profile *models.UserProf
 		Signature:  signature,
 		CreateTime: user.CreateTime,
 		PostCount:  postCount,
-		PostScore:  0,
+		PostScore:  postScore,
 		IsSelf:     currentUserID == targetUserID,
 	}, nil
 }
 
+func getUserPostScore(ctx context.Context, userID int64) (int64, error) {
+	postIDs, err := mysql.GetNormalPostIDsByAuthor(userID)
+	if err != nil {
+		return 0, err
+	}
+
+	var total int64
+	for _, postID := range postIDs {
+		total += redis.GetPostVoteValue(ctx, strconv.FormatInt(postID, 10))
+	}
+	return total, nil
+}
+
 // UpdateUserProfile 更新当前登录用户资料，并返回更新后的资料。
-func UpdateUserProfile(userID int64, p *models.ParamUpdateProfile) (*models.UserProfile, error) {
+func UpdateUserProfile(ctx context.Context, userID int64, p *models.ParamUpdateProfile) (*models.UserProfile, error) {
 	signature := strings.TrimSpace(p.Signature)
 	if err := mysql.UpdateUserSignature(userID, signature); err != nil {
 		return nil, err
 	}
-	return GetUserProfile(userID, userID)
+	return GetUserProfile(ctx, userID, userID)
 }
 
 // GetUserPosts 获取指定用户发布的帖子列表。
-func GetUserPosts(ctx context.Context, userID int64, p *models.ParamPostList) ([]*models.PostListItem, error) {
+func GetUserPosts(ctx context.Context, userID int64, p *models.ParamPostList, currentUserID int64) ([]*models.PostListItem, error) {
 	if _, err := mysql.GetUserProfileByID(userID); err != nil {
 		return nil, err
 	}
 	p.AuthorID = userID
-	return GetPostList(ctx, p)
+	return GetPostListWithViewer(ctx, p, currentUserID)
 }

@@ -13,6 +13,8 @@ import { apiClient, type PostDetail } from "@/lib/api";
 import { formatCount, formatDateTime } from "@/lib/format";
 import { cn, getErrorMessage } from "@/lib/utils";
 
+const SCORE_PER_VOTE = 432;
+
 export default function PostDetailPage() {
   const params = useParams();
   const postId = params.id as string;
@@ -29,6 +31,7 @@ export default function PostDetailPage() {
       try {
         const response = await apiClient.getPostDetail(postId);
         setPost(response.data);
+        setVote(response.data.current_user_vote || 0);
       } catch (err) {
         setError(getErrorMessage(err, "帖子不存在或加载失败。"));
       } finally {
@@ -43,6 +46,16 @@ export default function PostDetailPage() {
     const newVote = vote === direction ? 0 : direction;
     try {
       await apiClient.vote(postId, newVote);
+      setPost((currentPost) =>
+        currentPost
+          ? {
+              ...currentPost,
+              like_count: (currentPost.like_count || 0) + (newVote - vote) * SCORE_PER_VOTE,
+              vote_count: (currentPost.vote_count || 0) + newVote - vote,
+              current_user_vote: newVote,
+            }
+          : currentPost
+      );
       setVote(newVote);
     } catch (err) {
       setError(getErrorMessage(err, "投票失败，请稍后重试。"));
@@ -110,7 +123,7 @@ export default function PostDetailPage() {
               >
                 <ArrowUp className="h-5 w-5" />
               </button>
-              <span className="my-2 text-base font-bold text-foreground">{formatCount((post.like_count || 0) + vote)}</span>
+              <span className="my-2 text-base font-bold text-foreground">{formatCount(post.vote_count || 0)}</span>
               <button
                 onClick={() => handleVote(-1)}
                 className={cn(
@@ -142,7 +155,7 @@ export default function PostDetailPage() {
             <div className="mt-8 flex flex-wrap items-center gap-2 border-t border-border pt-5 text-sm text-muted">
               <span className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-surface-soft px-3 font-medium sm:hidden">
                 <ArrowUp className="h-4 w-4 text-primary" />
-                {formatCount((post.like_count || 0) + vote)}
+                {formatCount(post.vote_count || 0)}
               </span>
               <span className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-surface-soft px-3 font-medium">
                 <MessageSquare className="h-4 w-4" />

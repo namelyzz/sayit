@@ -14,18 +14,18 @@ import (
 
 // Outbox 模式配置常量
 const (
-	outboxBatchSize      = 50                    // 每次批量处理的事件数量
-	outboxWorkerInterval = 3 * time.Second       // Worker 轮询间隔
-	outboxMaxRetryDelay  = 60 * time.Second      // 最大重试延迟（指数退避上限）
+	outboxBatchSize      = 50               // 每次批量处理的事件数量
+	outboxWorkerInterval = 10 * time.Second // Worker 轮询间隔
+	outboxMaxRetryDelay  = 60 * time.Second // 最大重试延迟（指数退避上限）
 )
 
 // 以下变量可被测试替换（mock），方便单元测试
 var (
-	createPostWithOutboxFunc = mysql.CreatePostWithOutbox  // 事务性写入帖子+outbox
+	createPostWithOutboxFunc = mysql.CreatePostWithOutbox   // 事务性写入帖子+outbox
 	getPendingOutboxFunc     = mysql.GetPendingOutboxEvents // 获取待处理事件
 	markOutboxRetryFunc      = mysql.MarkOutboxRetry        // 标记事件重试
-	deleteOutboxEventFunc    = mysql.DeleteOutboxEvent       // 删除已处理事件
-	createPostRedisFunc      = redis.CreatePost              // 写入Redis排行榜
+	deleteOutboxEventFunc    = mysql.DeleteOutboxEvent      // 删除已处理事件
+	createPostRedisFunc      = redis.CreatePost             // 写入Redis排行榜
 )
 
 // StartOutboxWorker 启动 Outbox 后台补偿 worker

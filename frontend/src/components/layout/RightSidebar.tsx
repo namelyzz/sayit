@@ -1,18 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Award, ChevronRight, MessageSquareText, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Badge from "@/components/ui/Badge";
-import { apiClient, type PostListItem, type PostsResponse } from "@/lib/api";
+import { apiClient, type UserProfile } from "@/lib/api";
 import { formatCount } from "@/lib/format";
 import { previewFollowing } from "@/lib/user-preview";
-
-function normalizePosts(data: PostsResponse | PostListItem[] | undefined) {
-  if (!data) return [] as PostListItem[];
-  return Array.isArray(data) ? data : data.list ?? [];
-}
 
 function StatCard({ value, label }: { value: string; label: string }) {
   return (
@@ -25,41 +20,25 @@ function StatCard({ value, label }: { value: string; label: string }) {
 
 export default function RightSidebar() {
   const { user, loading: authLoading } = useAuth();
-  const [posts, setPosts] = useState<PostListItem[]>([]);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     if (authLoading || !user) {
-      if (!user) setPosts([]);
+      if (!user) setProfile(null);
       return;
     }
 
-    const fetchPosts = async () => {
+    const fetchProfile = async () => {
       try {
-        const response = await apiClient.getPosts({
-          page: 1,
-          size: 50,
-          sort_by: "create_time",
-          order: "desc",
-        });
-        const allPosts = normalizePosts(response.data);
-        setPosts(allPosts.filter((post) => post.user_name === user.user_name));
+        const response = await apiClient.getUserProfile(user.user_id);
+        setProfile(response.data);
       } catch {
-        setPosts([]);
+        setProfile(null);
       }
     };
 
-    fetchPosts();
+    fetchProfile();
   }, [authLoading, user]);
-
-  const stats = useMemo(() => {
-    const postCount = posts.length;
-    const totalScore = posts.reduce((sum, post) => sum + (post.like_count ?? 0), 0);
-    return {
-      postCount,
-      totalScore,
-      followingCount: previewFollowing.length,
-    };
-  }, [posts]);
 
   return (
     <aside className="sticky top-5 hidden h-[calc(100vh-1.25rem)] overflow-y-auto xl:block scrollbar-thin">
@@ -91,9 +70,9 @@ export default function RightSidebar() {
               </Link>
 
               <div className="mt-5 grid grid-cols-3 gap-3">
-                <StatCard value={formatCount(stats.postCount)} label="发布" />
-                <StatCard value={formatCount(stats.totalScore)} label="分数" />
-                <StatCard value={formatCount(stats.followingCount)} label="关注" />
+                <StatCard value={formatCount(profile?.post_count ?? 0)} label="发布" />
+                <StatCard value={formatCount(profile?.post_score ?? 0)} label="热度" />
+                <StatCard value={formatCount(previewFollowing.length)} label="关注" />
               </div>
             </>
           ) : (

@@ -13,7 +13,8 @@ interface PostCardProps {
 }
 
 export default function PostCard({ post }: PostCardProps) {
-  const [vote, setVote] = useState(0);
+  const [vote, setVote] = useState(post.current_user_vote || 0);
+  const [voteCount, setVoteCount] = useState(post.vote_count || 0);
   const [error, setError] = useState("");
 
   const handleVote = async (direction: number) => {
@@ -22,13 +23,12 @@ export default function PostCard({ post }: PostCardProps) {
 
     try {
       await apiClient.vote(post.post_id, nextVote);
+      setVoteCount((currentVoteCount) => currentVoteCount + nextVote - vote);
       setVote(nextVote);
     } catch (err) {
       setError(getErrorMessage(err, "投票失败，请稍后重试。"));
     }
   };
-
-  const displayScore = (post.like_count || 0) + vote;
 
   return (
     <article className="group rounded-lg border border-border bg-surface p-4 shadow-[0_6px_18px_rgba(69,123,157,0.10)] transition hover:border-border-strong hover:shadow-[0_10px_24px_rgba(69,123,157,0.14)]">
@@ -44,7 +44,7 @@ export default function PostCard({ post }: PostCardProps) {
           >
             <ArrowUp className="h-4 w-4" />
           </button>
-          <span className="my-1 text-sm font-bold text-foreground">{formatCount(displayScore)}</span>
+          <span className="my-1 text-sm font-bold text-foreground">{formatCount(voteCount)}</span>
           <button
             onClick={() => handleVote(-1)}
             className={cn(
@@ -81,7 +81,7 @@ export default function PostCard({ post }: PostCardProps) {
           <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted">
             <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-surface-soft px-2.5 font-medium sm:hidden">
               <ArrowUp className="h-4 w-4 text-primary" />
-              {formatCount(displayScore)}
+              {formatCount(voteCount)}
             </span>
             <Link
               href={`/post/${post.post_id}`}
