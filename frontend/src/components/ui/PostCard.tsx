@@ -15,6 +15,7 @@ interface PostCardProps {
 export default function PostCard({ post }: PostCardProps) {
   const [vote, setVote] = useState(post.current_user_vote || 0);
   const [voteCount, setVoteCount] = useState(post.vote_count || 0);
+  const [authorActive, setAuthorActive] = useState(false);
   const [error, setError] = useState("");
 
   const handleVote = async (direction: number) => {
@@ -64,12 +65,34 @@ export default function PostCard({ post }: PostCardProps) {
               name={post.community_name}
               href={`/community/${post.community_id}`}
             />
-            <span>由 {post.user_name || "匿名用户"} 发布</span>
+            <span>
+              由{" "}
+              {post.author_id ? (
+                <Link
+                  href={`/user/${post.author_id}`}
+                  onMouseEnter={() => setAuthorActive(true)}
+                  onMouseLeave={() => setAuthorActive(false)}
+                  onFocus={() => setAuthorActive(true)}
+                  onBlur={() => setAuthorActive(false)}
+                  className="rounded-md px-1 py-0.5 font-semibold text-muted-strong transition hover:bg-[#457b9d]/10 hover:text-primary focus:bg-[#457b9d]/10 focus:text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  {post.user_name || "匿名用户"}
+                </Link>
+              ) : (
+                post.user_name || "匿名用户"
+              )}{" "}
+              发布
+            </span>
             <span>{formatDateTime(post.create_time)}</span>
           </div>
 
           <Link href={`/post/${post.post_id}`} className="mt-2 block">
-            <h2 className="line-clamp-2 text-lg font-semibold leading-7 text-foreground transition group-hover:text-primary">
+            <h2
+              className={cn(
+                "line-clamp-2 text-lg font-semibold leading-7 text-foreground transition",
+                !authorActive && "group-hover:text-primary"
+              )}
+            >
               {post.title || "无标题帖子"}
             </h2>
           </Link>

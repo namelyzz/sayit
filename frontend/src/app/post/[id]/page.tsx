@@ -144,7 +144,20 @@ export default function PostDetailPage() {
                   {post.community.name}
                 </Link>
               ) : null}
-              <span>由 {post.author_name || "匿名用户"} 发布</span>
+              <span>
+                由{" "}
+                {post.author_id ? (
+                  <Link
+                    href={`/user/${post.author_id}`}
+                    className="rounded-md px-1 py-0.5 font-semibold text-muted-strong transition hover:bg-[#457b9d]/10 hover:text-primary focus:bg-[#457b9d]/10 focus:text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  >
+                    {post.author_name || "匿名用户"}
+                  </Link>
+                ) : (
+                  post.author_name || "匿名用户"
+                )}{" "}
+                发布
+              </span>
               <span>{formatDateTime(post.create_time)}</span>
             </div>
 

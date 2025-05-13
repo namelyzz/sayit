@@ -59,6 +59,21 @@ function SectionCard({
   );
 }
 
+function LoginLockedCard({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-border-strong bg-surface-soft px-4 py-5 text-sm leading-6 text-muted-strong">
+      <p className="font-semibold text-foreground">{title}</p>
+      <p className="mt-1">{description}</p>
+      <Link
+        href="/login"
+        className="mt-4 inline-flex h-9 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-white transition hover:bg-primary-dark"
+      >
+        登录后查看更多
+      </Link>
+    </div>
+  );
+}
+
 function InfoItem({
   label,
   value,
@@ -184,6 +199,7 @@ export default function UserManagementPage() {
   const signature = profile?.signature ?? "这个人很懒，还没有留下签名。";
   const avatarText = displayName.slice(0, 1).toUpperCase();
   const people = activeList === "followers" ? previewFollowers : previewFollowing;
+  const canViewPrivateBlocks = Boolean(user);
 
   const profileMeta = useMemo(
     () => [
@@ -255,7 +271,7 @@ export default function UserManagementPage() {
 
               <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[360px]">
                 <button
-                  onClick={() => setActiveList("followers")}
+                  onClick={() => (canViewPrivateBlocks ? setActiveList("followers") : undefined)}
                   className="rounded-lg border border-white/70 bg-white/88 px-4 py-4 text-left shadow-sm transition hover:border-[#457b9d]/20 hover:shadow-md"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -267,11 +283,13 @@ export default function UserManagementPage() {
                     </span>
                   </div>
                   <p className="mt-4 text-sm font-semibold text-foreground">粉丝</p>
-                  <p className="mt-1 text-xs leading-5 text-muted">看看是谁在关注你</p>
+                  <p className="mt-1 text-xs leading-5 text-muted">
+                    {canViewPrivateBlocks ? "看看是谁在关注你" : "登录后查看关系详情"}
+                  </p>
                 </button>
 
                 <button
-                  onClick={() => setActiveList("following")}
+                  onClick={() => (canViewPrivateBlocks ? setActiveList("following") : undefined)}
                   className="rounded-lg border border-white/70 bg-white/88 px-4 py-4 text-left shadow-sm transition hover:border-[#457b9d]/20 hover:shadow-md"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -283,7 +301,9 @@ export default function UserManagementPage() {
                     </span>
                   </div>
                   <p className="mt-4 text-sm font-semibold text-foreground">关注</p>
-                  <p className="mt-1 text-xs leading-5 text-muted">看看你正在关注谁</p>
+                  <p className="mt-1 text-xs leading-5 text-muted">
+                    {canViewPrivateBlocks ? "看看你正在关注谁" : "登录后查看关系详情"}
+                  </p>
                 </button>
               </div>
             </div>
@@ -342,20 +362,24 @@ export default function UserManagementPage() {
           </div>
 
           <SectionCard title="关系预览">
-            <div className="space-y-3">
-              <div className="rounded-lg border border-border bg-surface-soft px-4 py-4">
-                <p className="text-sm font-semibold text-foreground">粉丝</p>
-                <p className="mt-1 text-sm leading-6 text-muted-strong">
-                  点击顶部统计卡，可查看关注你的用户列表。
-                </p>
+            {canViewPrivateBlocks ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-border bg-surface-soft px-4 py-4">
+                  <p className="text-sm font-semibold text-foreground">粉丝</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-strong">
+                    点击顶部统计卡，可查看关注你的用户列表。
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-surface-soft px-4 py-4">
+                  <p className="text-sm font-semibold text-foreground">关注</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-strong">
+                    点击顶部统计卡，可查看你关注的用户列表。
+                  </p>
+                </div>
               </div>
-              <div className="rounded-lg border border-border bg-surface-soft px-4 py-4">
-                <p className="text-sm font-semibold text-foreground">关注</p>
-                <p className="mt-1 text-sm leading-6 text-muted-strong">
-                  点击顶部统计卡，可查看你关注的用户列表。
-                </p>
-              </div>
-            </div>
+            ) : (
+              <LoginLockedCard title="关系信息已锁定" description="粉丝、关注列表属于登录后信息。登录后可继续查看用户关系详情。" />
+            )}
           </SectionCard>
         </div>
 
@@ -399,27 +423,31 @@ export default function UserManagementPage() {
             title="最新评论"
             extra={<span className="text-sm font-medium text-muted-strong">共 {formatCount(previewComments.length)} 条</span>}
           >
-            <div className="space-y-3">
-              {previewComments.map((comment) => (
-                <article key={comment.id} className="rounded-lg border border-border bg-surface-soft px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">{comment.postTitle}</p>
-                      <p className="mt-2 text-sm leading-6 text-muted-strong">{comment.excerpt}</p>
+            {canViewPrivateBlocks ? (
+              <div className="space-y-3">
+                {previewComments.map((comment) => (
+                  <article key={comment.id} className="rounded-lg border border-border bg-surface-soft px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{comment.postTitle}</p>
+                        <p className="mt-2 text-sm leading-6 text-muted-strong">{comment.excerpt}</p>
+                      </div>
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-muted">
+                        <MessageSquareText className="h-3.5 w-3.5" />
+                        预览
+                      </span>
                     </div>
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-muted">
-                      <MessageSquareText className="h-3.5 w-3.5" />
-                      预览
-                    </span>
-                  </div>
-                  <p className="mt-3 text-xs text-muted">{formatDateTime(comment.createdAt)}</p>
-                </article>
-              ))}
+                    <p className="mt-3 text-xs text-muted">{formatDateTime(comment.createdAt)}</p>
+                  </article>
+                ))}
 
-              <div className="rounded-lg border border-dashed border-border-strong bg-surface px-4 py-4 text-sm leading-6 text-muted">
-                评论系统接入后，这里会按时间展示你的最新评论，并同步评论总数。
+                <div className="rounded-lg border border-dashed border-border-strong bg-surface px-4 py-4 text-sm leading-6 text-muted">
+                  评论系统接入后，这里会按时间展示你的最新评论，并同步评论总数。
+                </div>
               </div>
-            </div>
+            ) : (
+              <LoginLockedCard title="评论信息已锁定" description="登录后可以查看更多评论活动和个人互动信息。" />
+            )}
           </SectionCard>
         </div>
       </PageShell>

@@ -42,6 +42,7 @@ export interface PostListItem {
   post_id: string;
   title: string;
   summary: string;
+  author_id: string;
   user_name: string;
   community_id: string;
   community_name: string;
@@ -61,6 +62,7 @@ export interface PostDetail {
   post_id: string;
   title: string;
   content: string;
+  author_id: string;
   author_name: string;
   community: {
     community_id: string;

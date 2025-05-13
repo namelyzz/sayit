@@ -35,7 +35,7 @@ func CreatePostHandler(c *gin.Context) {
 	}
 
 	// 4. 设置帖子作者为当前登录用户（客户端不能篡改作者ID）
-	p.AuthorID = userID
+	p.AuthorID = models.SnowflakeID(userID)
 
 	// 5. 调用 service 层执行创建帖子的业务逻辑
 	// 包括: 生成帖子ID、写入MySQL、同步写入Redis排行榜

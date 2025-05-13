@@ -74,7 +74,7 @@ func GetPostDetailByID(ctx context.Context, postID int64, currentUserID int64) (
 	}
 
 	// 2. 根据帖子的 author_id 查询作者信息
-	authorID := post.AuthorID
+	authorID := int64(post.AuthorID)
 	user, err := mysql.GetUserByID(authorID)
 	if err != nil {
 		zap.L().Error("mysql.GetUserByID failed",
