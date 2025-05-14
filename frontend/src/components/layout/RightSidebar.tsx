@@ -7,7 +7,6 @@ import { useAuth } from "@/context/AuthContext";
 import Badge from "@/components/ui/Badge";
 import { apiClient, type UserProfile } from "@/lib/api";
 import { formatCount } from "@/lib/format";
-import { previewFollowing } from "@/lib/user-preview";
 
 function StatCard({ value, label }: { value: string; label: string }) {
   return (
@@ -72,7 +71,7 @@ export default function RightSidebar() {
               <div className="mt-5 grid grid-cols-3 gap-3">
                 <StatCard value={formatCount(profile?.post_count ?? 0)} label="发布" />
                 <StatCard value={formatCount(profile?.post_score ?? 0)} label="热度" />
-                <StatCard value={formatCount(previewFollowing.length)} label="关注" />
+                <StatCard value={formatCount(profile?.following_count ?? 0)} label="关注" />
               </div>
             </>
           ) : (

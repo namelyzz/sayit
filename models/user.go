@@ -21,11 +21,30 @@ func (User) TableName() string {
 }
 
 type UserProfile struct {
-	UserID     SnowflakeID `json:"user_id"`
-	Username   string      `json:"user_name"`
-	Signature  string      `json:"signature"`
-	CreateTime time.Time   `json:"create_time"`
-	PostCount  int64       `json:"post_count"`
-	PostScore  int64       `json:"post_score"`
-	IsSelf     bool        `json:"is_self"`
+	UserID         SnowflakeID `json:"user_id"`
+	Username       string      `json:"user_name"`
+	Signature      string      `json:"signature"`
+	CreateTime     time.Time   `json:"create_time"`
+	PostCount      int64       `json:"post_count"`
+	PostScore      int64       `json:"post_score"`
+	FollowerCount  int64       `json:"follower_count"`
+	FollowingCount int64       `json:"following_count"`
+	IsFollowing    bool        `json:"is_following"`
+	IsSelf         bool        `json:"is_self"`
+}
+
+// UserFollow 用户关注关系。
+// follower_id 关注 following_id，复合主键保证同一关系只存在一次。
+type UserFollow struct {
+	FollowerID  SnowflakeID `json:"follower_id" gorm:"column:follower_id;primaryKey"`
+	FollowingID SnowflakeID `json:"following_id" gorm:"column:following_id;primaryKey"`
+	CreateTime  time.Time   `json:"create_time" gorm:"column:create_time;autoCreateTime"`
+}
+
+func (UserFollow) TableName() string {
+	return "user_follow"
+}
+
+type UserFollowStatus struct {
+	IsFollowing bool `json:"is_following"`
 }

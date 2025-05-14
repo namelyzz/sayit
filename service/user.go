@@ -8,6 +8,7 @@ import (
 	"github.com/namelyzz/sayit/dao/mysql"
 	"github.com/namelyzz/sayit/dao/redis"
 	"github.com/namelyzz/sayit/models"
+	"github.com/namelyzz/sayit/utils/api"
 	"github.com/namelyzz/sayit/utils/jwt"
 	"github.com/namelyzz/sayit/utils/snowflake"
 )
@@ -69,6 +70,21 @@ func GetUserProfile(ctx context.Context, currentUserID, targetUserID int64) (pro
 	if err != nil {
 		return nil, err
 	}
+	followerCount, err := mysql.CountFollowers(targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	followingCount, err := mysql.CountFollowing(targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	isFollowing := false
+	if currentUserID != 0 && currentUserID != targetUserID {
+		isFollowing, err = mysql.IsFollowingUser(currentUserID, targetUserID)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	signature := user.Signature
 	if signature == "" {
@@ -76,13 +92,16 @@ func GetUserProfile(ctx context.Context, currentUserID, targetUserID int64) (pro
 	}
 
 	return &models.UserProfile{
-		UserID:     user.UserID,
-		Username:   user.Username,
-		Signature:  signature,
-		CreateTime: user.CreateTime,
-		PostCount:  postCount,
-		PostScore:  postScore,
-		IsSelf:     currentUserID == targetUserID,
+		UserID:         user.UserID,
+		Username:       user.Username,
+		Signature:      signature,
+		CreateTime:     user.CreateTime,
+		PostCount:      postCount,
+		PostScore:      postScore,
+		FollowerCount:  followerCount,
+		FollowingCount: followingCount,
+		IsFollowing:    isFollowing,
+		IsSelf:         currentUserID == targetUserID,
 	}, nil
 }
 
@@ -115,4 +134,37 @@ func GetUserPosts(ctx context.Context, userID int64, p *models.ParamPostList, cu
 	}
 	p.AuthorID = userID
 	return GetPostListWithViewer(ctx, p, currentUserID)
+}
+
+// FollowUser 关注用户。
+func FollowUser(currentUserID, targetUserID int64) error {
+	if currentUserID == targetUserID {
+		return api.ErrorFollowSelf
+	}
+	if _, err := mysql.GetUserProfileByID(targetUserID); err != nil {
+		return err
+	}
+	return mysql.FollowUser(currentUserID, targetUserID)
+}
+
+// UnfollowUser 取消关注用户。
+func UnfollowUser(currentUserID, targetUserID int64) error {
+	if currentUserID == targetUserID {
+		return api.ErrorFollowSelf
+	}
+	if _, err := mysql.GetUserProfileByID(targetUserID); err != nil {
+		return err
+	}
+	return mysql.UnfollowUser(currentUserID, targetUserID)
+}
+
+// IsFollowingUser 检查当前用户是否关注目标用户。
+func IsFollowingUser(currentUserID, targetUserID int64) (bool, error) {
+	if currentUserID == targetUserID {
+		return false, nil
+	}
+	if _, err := mysql.GetUserProfileByID(targetUserID); err != nil {
+		return false, err
+	}
+	return mysql.IsFollowingUser(currentUserID, targetUserID)
 }

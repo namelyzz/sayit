@@ -9,6 +9,8 @@ import {
   Heart,
   MessageSquareText,
   PencilLine,
+  UserCheck,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -157,6 +159,8 @@ export default function UserManagementPage() {
   const [signatureDraft, setSignatureDraft] = useState("");
   const [savingSignature, setSavingSignature] = useState(false);
   const [signatureSaved, setSignatureSaved] = useState(false);
+  const [isFollowingUser, setIsFollowingUser] = useState(false);
+  const [savingFollow, setSavingFollow] = useState(false);
   const [activeList, setActiveList] = useState<ProfileListType>(null);
 
   useEffect(() => {
@@ -171,6 +175,7 @@ export default function UserManagementPage() {
         const nextProfile = profileResponse.data;
         setProfile(nextProfile);
         setSignatureDraft(nextProfile.signature);
+        setIsFollowingUser(nextProfile.is_following);
 
         const postsResponse = await apiClient.getUserPosts(profileId, {
           page: 1,
@@ -197,6 +202,8 @@ export default function UserManagementPage() {
   const postHeat = profile?.post_score ?? posts.reduce((sum, post) => sum + (post.like_count ?? 0), 0);
   const displayName = profile?.user_name ?? (isSelf ? user?.user_name ?? "我的账号" : `用户 ${profileId.slice(0, 6)}`);
   const signature = profile?.signature ?? "这个人很懒，还没有留下签名。";
+  const followerCount = profile?.follower_count ?? 0;
+  const followingCount = profile?.following_count ?? 0;
   const avatarText = displayName.slice(0, 1).toUpperCase();
   const people = activeList === "followers" ? previewFollowers : previewFollowing;
   const canViewPrivateBlocks = Boolean(user);
@@ -240,6 +247,51 @@ export default function UserManagementPage() {
     }
   };
 
+  const handleToggleFollow = async () => {
+    if (!profile || savingFollow) return;
+
+    setSavingFollow(true);
+    setError("");
+
+    try {
+      const response = isFollowingUser
+        ? await apiClient.unfollowUser(profileId)
+        : await apiClient.followUser(profileId);
+      const nextFollowing = response.data.is_following;
+      setIsFollowingUser(nextFollowing);
+      setProfile({
+        ...profile,
+        is_following: nextFollowing,
+        follower_count: Math.max(0, profile.follower_count + (nextFollowing ? 1 : -1)),
+      });
+    } catch (err) {
+      setError(getErrorMessage(err, "关注操作失败，请稍后再试。"));
+    } finally {
+      setSavingFollow(false);
+    }
+  };
+
+  const followAction = isSelf ? null : user ? (
+    <Button
+      variant={isFollowingUser ? "outline" : "primary"}
+      onClick={handleToggleFollow}
+      disabled={savingFollow || !profile}
+      size="sm"
+      className="h-8 px-3"
+    >
+      {isFollowingUser ? <UserCheck className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+      {savingFollow ? "处理中" : isFollowingUser ? "已关注" : "关注"}
+    </Button>
+  ) : (
+    <Link
+      href="/login"
+      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-white px-3 text-xs font-medium text-muted-strong shadow-sm transition hover:border-[#457b9d]/30 hover:bg-[#457b9d]/8 hover:text-primary"
+    >
+      <UserPlus className="h-4 w-4" />
+      登录关注
+    </Link>
+  );
+
   return (
     <>
       <PageShell className="!max-w-none space-y-6">
@@ -260,6 +312,7 @@ export default function UserManagementPage() {
                     <div className="flex flex-wrap items-center gap-3">
                       <h1 className="text-2xl font-bold text-foreground">{displayName}</h1>
                       {isSelf ? <Badge tone="neutral">我的页面</Badge> : null}
+                      {followAction}
                     </div>
                     <p className="mt-2 text-sm text-muted">ID {profileId}</p>
                     <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-strong">
@@ -279,7 +332,7 @@ export default function UserManagementPage() {
                       <Users className="h-5 w-5" />
                     </span>
                     <span className="text-xl font-semibold text-foreground">
-                      {formatCount(previewFollowers.length)}
+                      {formatCount(followerCount)}
                     </span>
                   </div>
                   <p className="mt-4 text-sm font-semibold text-foreground">粉丝</p>
@@ -297,7 +350,7 @@ export default function UserManagementPage() {
                       <Heart className="h-5 w-5" />
                     </span>
                     <span className="text-xl font-semibold text-foreground">
-                      {formatCount(previewFollowing.length)}
+                      {formatCount(followingCount)}
                     </span>
                   </div>
                   <p className="mt-4 text-sm font-semibold text-foreground">关注</p>
@@ -389,7 +442,9 @@ export default function UserManagementPage() {
             extra={<span className="text-sm font-medium text-muted-strong">共 {formatCount(postCount)} 条</span>}
           >
             <div className="space-y-3">
-              {loading ? (
+              {!user ? (
+                <LoginLockedCard title="帖子列表已锁定" description="登录后可以查看该用户发布的最新帖子并参与互动。" />
+              ) : loading ? (
                 <>
                   <PostCardSkeleton />
                   <PostCardSkeleton />

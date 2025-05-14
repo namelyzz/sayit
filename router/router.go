@@ -32,6 +32,9 @@ func SetupRouter(mode string) *gin.Engine {
 	{
 		v1.GET("/me", controller.GetMeHandler)
 		v1.PATCH("/me", controller.UpdateMeHandler)
+		v1.POST("/users/:id/follow", controller.FollowUserHandler)
+		v1.DELETE("/users/:id/follow", controller.UnfollowUserHandler)
+		v1.GET("/users/:id/follow_status", controller.GetUserFollowStatusHandler)
 
 		v1.POST("/create_post", controller.CreatePostHandler)
 		v1.POST("/vote", controller.PostVoteController)

@@ -18,6 +18,9 @@ export interface UserProfile {
   create_time: string;
   post_count: number;
   post_score: number;
+  follower_count: number;
+  following_count: number;
+  is_following: boolean;
   is_self: boolean;
 }
 
@@ -173,6 +176,18 @@ class ApiClient {
     return this.request<UserProfile>("/me", {
       method: "PATCH",
       body: JSON.stringify({ signature }),
+    });
+  }
+
+  async followUser(id: string) {
+    return this.request<{ is_following: boolean }>(`/users/${id}/follow`, {
+      method: "POST",
+    });
+  }
+
+  async unfollowUser(id: string) {
+    return this.request<{ is_following: boolean }>(`/users/${id}/follow`, {
+      method: "DELETE",
     });
   }
 

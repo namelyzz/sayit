@@ -27,7 +27,7 @@ func CheckUserExist(username string) (err error) {
 func InsertUser(user *models.User) (err error) {
 	// 对明文密码进行哈希加密后替换，确保数据库中不存储明文密码
 	user.Password = security.HashPassword(user.Password)
-	res := db.Create(user)
+	res := db.Omit("CreateTime", "UpdateTime").Create(user)
 	return res.Error
 }
 

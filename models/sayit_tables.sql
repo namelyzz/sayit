@@ -15,6 +15,16 @@ CURRENT_TIMESTAMP,
                         UNIQUE KEY `idx_user_id` (`user_id`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+DROP TABLE IF EXISTS `user_follow`;
+CREATE TABLE `user_follow` (
+                               `follower_id` bigint(20) NOT NULL,
+                               `following_id` bigint(20) NOT NULL,
+                               `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+                               PRIMARY KEY (`follower_id`, `following_id`),
+                               KEY `idx_following_id` (`following_id`),
+                               KEY `idx_follower_id` (`follower_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 DROP TABLE IF EXISTS `community`;
 CREATE TABLE `community` (
                              `id` int(11) NOT NULL AUTO_INCREMENT,

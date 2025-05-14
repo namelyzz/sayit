@@ -98,7 +98,7 @@ func GetUserProfileHandler(c *gin.Context) {
 		return
 	}
 
-	profile, err := service.GetUserProfile(c.Request.Context(), 0, targetUserID)
+	profile, err := service.GetUserProfile(c.Request.Context(), api.GetOptionalUserID(c), targetUserID)
 	if err != nil {
 		if errors.Is(err, api.ErrorUserNotExist) {
 			api.ResponseError(c, api.CodeUserNotExist)
@@ -209,4 +209,106 @@ func GetUserPostsHandler(c *gin.Context) {
 	}
 
 	api.ResponseSuccess(c, posts)
+}
+
+// FollowUserHandler 关注用户。
+// 路由: POST /api/v1/users/:id/follow (需要JWT认证)
+func FollowUserHandler(c *gin.Context) {
+	currentUserID, err := api.GetCurrentUserID(c)
+	if err != nil {
+		api.ResponseError(c, api.CodeNeedLogin)
+		return
+	}
+
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	if err := service.FollowUser(currentUserID, targetUserID); err != nil {
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
+			return
+		}
+		if errors.Is(err, api.ErrorFollowSelf) {
+			api.ResponseErrorWithMsg(c, api.CodeInvalidParam, err.Error())
+			return
+		}
+		zap.L().Error("follow user failed",
+			zap.Int64("current_user_id", currentUserID),
+			zap.Int64("target_user_id", targetUserID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, &models.UserFollowStatus{IsFollowing: true})
+}
+
+// UnfollowUserHandler 取消关注用户。
+// 路由: DELETE /api/v1/users/:id/follow (需要JWT认证)
+func UnfollowUserHandler(c *gin.Context) {
+	currentUserID, err := api.GetCurrentUserID(c)
+	if err != nil {
+		api.ResponseError(c, api.CodeNeedLogin)
+		return
+	}
+
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	if err := service.UnfollowUser(currentUserID, targetUserID); err != nil {
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
+			return
+		}
+		if errors.Is(err, api.ErrorFollowSelf) {
+			api.ResponseErrorWithMsg(c, api.CodeInvalidParam, err.Error())
+			return
+		}
+		zap.L().Error("unfollow user failed",
+			zap.Int64("current_user_id", currentUserID),
+			zap.Int64("target_user_id", targetUserID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, &models.UserFollowStatus{IsFollowing: false})
+}
+
+// GetUserFollowStatusHandler 检查当前用户是否已关注目标用户。
+// 路由: GET /api/v1/users/:id/follow_status (需要JWT认证)
+func GetUserFollowStatusHandler(c *gin.Context) {
+	currentUserID, err := api.GetCurrentUserID(c)
+	if err != nil {
+		api.ResponseError(c, api.CodeNeedLogin)
+		return
+	}
+
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	isFollowing, err := service.IsFollowingUser(currentUserID, targetUserID)
+	if err != nil {
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
+			return
+		}
+		zap.L().Error("get user follow status failed",
+			zap.Int64("current_user_id", currentUserID),
+			zap.Int64("target_user_id", targetUserID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, &models.UserFollowStatus{IsFollowing: isFollowing})
 }
