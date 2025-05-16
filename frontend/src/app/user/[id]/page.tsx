@@ -22,13 +22,10 @@ import PageShell from "@/components/ui/PageShell";
 import PostCard from "@/components/ui/PostCard";
 import { PostCardSkeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
-import { apiClient, type PostListItem, type PostsResponse, type UserProfile } from "@/lib/api";
+import { apiClient, type PostListItem, type PostsResponse, type UserFollowItem, type UserProfile } from "@/lib/api";
 import { formatCount, formatDateTime, formatShortDate } from "@/lib/format";
 import {
   previewComments,
-  previewFollowers,
-  previewFollowing,
-  type PreviewPerson,
 } from "@/lib/user-preview";
 import { cn, getErrorMessage } from "@/lib/utils";
 
@@ -99,23 +96,37 @@ function InfoItem({
 function PeopleDialog({
   type,
   people,
+  total,
+  loading,
+  currentUserId,
+  canManageFollowing,
+  pendingUserId,
+  onFollow,
+  onUnfollow,
   onClose,
 }: {
   type: Exclude<ProfileListType, null>;
-  people: PreviewPerson[];
+  people: UserFollowItem[];
+  total: number;
+  loading: boolean;
+  currentUserId?: string;
+  canManageFollowing: boolean;
+  pendingUserId: string;
+  onFollow: (id: string) => void;
+  onUnfollow: (id: string) => void;
   onClose: () => void;
 }) {
   const title = type === "followers" ? "粉丝列表" : "关注列表";
   const description =
-    type === "followers" ? "这些用户关注了你。" : "这些是你正在关注的用户。";
+    type === "followers" ? "这些用户关注了这个主页。" : "这个主页正在关注这些用户。";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.18)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.18)]" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-            <p className="mt-1 text-sm text-muted">{description}</p>
+            <p className="mt-1 text-sm text-muted">{description} 共 {formatCount(total)} 人。</p>
           </div>
           <button
             onClick={onClose}
@@ -127,20 +138,62 @@ function PeopleDialog({
         </div>
 
         <div className="mt-5 space-y-3">
-          {people.map((person) => (
-            <div
-              key={person.id}
-              className="flex items-start gap-3 rounded-lg border border-border bg-surface px-4 py-3"
-            >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#457b9d]/12 text-sm font-semibold text-primary">
-                {person.name.slice(0, 1)}
+          {loading ? (
+            <div className="rounded-lg border border-border bg-surface-soft px-4 py-8 text-center text-sm text-muted">加载中...</div>
+          ) : people.length > 0 ? (
+            people.map((person) => (
+              <div
+                key={person.user_id}
+                className="flex items-start justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3 transition hover:border-[#457b9d]/25 hover:bg-surface-soft"
+              >
+                <Link href={`/user/${person.user_id}`} onClick={onClose} className="flex min-w-0 flex-1 items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#457b9d]/12 text-sm font-semibold text-primary">
+                    {person.user_name.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-foreground">{person.user_name}</p>
+                      {person.is_mutual ? (
+                        <span className="rounded-md bg-[#457b9d]/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                          互相关注
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-sm leading-6 text-muted-strong">
+                      {person.signature || "这个人很懒，还没有留下签名。"}
+                    </p>
+                  </div>
+                </Link>
+
+                <div className="shrink-0 pt-1">
+                  {currentUserId && person.user_id !== currentUserId && type === "followers" && !person.is_following ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={pendingUserId === person.user_id}
+                      onClick={() => onFollow(person.user_id)}
+                    >
+                      {pendingUserId === person.user_id ? "处理中" : "关注Ta"}
+                    </Button>
+                  ) : null}
+                  {canManageFollowing && currentUserId && person.user_id !== currentUserId && type === "following" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={pendingUserId === person.user_id}
+                      onClick={() => onUnfollow(person.user_id)}
+                    >
+                      {pendingUserId === person.user_id ? "处理中" : "取消关注"}
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground">{person.name}</p>
-                <p className="mt-1 text-sm leading-6 text-muted-strong">{person.note}</p>
-              </div>
+            ))
+          ) : (
+            <div className="rounded-lg border border-border bg-surface-soft px-4 py-8 text-center text-sm text-muted">
+              {type === "followers" ? "还没有粉丝。" : "还没有关注任何用户。"}
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
@@ -162,6 +215,10 @@ export default function UserManagementPage() {
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [savingFollow, setSavingFollow] = useState(false);
   const [activeList, setActiveList] = useState<ProfileListType>(null);
+  const [followPeople, setFollowPeople] = useState<UserFollowItem[]>([]);
+  const [followTotal, setFollowTotal] = useState(0);
+  const [followListLoading, setFollowListLoading] = useState(false);
+  const [pendingFollowListUserId, setPendingFollowListUserId] = useState("");
 
   useEffect(() => {
     if (authLoading) return;
@@ -205,7 +262,6 @@ export default function UserManagementPage() {
   const followerCount = profile?.follower_count ?? 0;
   const followingCount = profile?.following_count ?? 0;
   const avatarText = displayName.slice(0, 1).toUpperCase();
-  const people = activeList === "followers" ? previewFollowers : previewFollowing;
   const canViewPrivateBlocks = Boolean(user);
 
   const profileMeta = useMemo(
@@ -271,6 +327,80 @@ export default function UserManagementPage() {
     }
   };
 
+  const handleOpenFollowList = async (type: Exclude<ProfileListType, null>) => {
+    if (!canViewPrivateBlocks) return;
+
+    setActiveList(type);
+    setFollowPeople([]);
+    setFollowTotal(0);
+    setFollowListLoading(true);
+    setPendingFollowListUserId("");
+    setError("");
+
+    try {
+      const response =
+        type === "followers"
+          ? await apiClient.getUserFollowers(profileId, { page: 1, size: 50 })
+          : await apiClient.getUserFollowing(profileId, { page: 1, size: 50 });
+      setFollowPeople(response.data.list ?? []);
+      setFollowTotal(response.data.total ?? 0);
+    } catch (err) {
+      setError(getErrorMessage(err, "关注列表加载失败，请稍后再试。"));
+      setActiveList(null);
+    } finally {
+      setFollowListLoading(false);
+    }
+  };
+
+  const handleFollowFromList = async (targetUserId: string) => {
+    if (pendingFollowListUserId) return;
+
+    setPendingFollowListUserId(targetUserId);
+    setError("");
+
+    try {
+      await apiClient.followUser(targetUserId);
+      setFollowPeople((items) =>
+        items.map((item) =>
+          item.user_id === targetUserId
+            ? { ...item, is_following: true, is_mutual: item.is_followed_by }
+            : item
+        )
+      );
+      if (user?.user_id === profileId) {
+        setProfile((current) =>
+          current ? { ...current, following_count: current.following_count + 1 } : current
+        );
+      }
+    } catch (err) {
+      setError(getErrorMessage(err, "关注操作失败，请稍后再试。"));
+    } finally {
+      setPendingFollowListUserId("");
+    }
+  };
+
+  const handleUnfollowFromList = async (targetUserId: string) => {
+    if (pendingFollowListUserId) return;
+
+    setPendingFollowListUserId(targetUserId);
+    setError("");
+
+    try {
+      await apiClient.unfollowUser(targetUserId);
+      setFollowPeople((items) => items.filter((item) => item.user_id !== targetUserId));
+      setFollowTotal((current) => Math.max(0, current - 1));
+      if (user?.user_id === profileId) {
+        setProfile((current) =>
+          current ? { ...current, following_count: Math.max(0, current.following_count - 1) } : current
+        );
+      }
+    } catch (err) {
+      setError(getErrorMessage(err, "取消关注失败，请稍后再试。"));
+    } finally {
+      setPendingFollowListUserId("");
+    }
+  };
+
   const followAction = isSelf ? null : user ? (
     <Button
       variant={isFollowingUser ? "outline" : "primary"}
@@ -324,7 +454,7 @@ export default function UserManagementPage() {
 
               <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[360px]">
                 <button
-                  onClick={() => (canViewPrivateBlocks ? setActiveList("followers") : undefined)}
+                  onClick={() => handleOpenFollowList("followers")}
                   className="rounded-lg border border-white/70 bg-white/88 px-4 py-4 text-left shadow-sm transition hover:border-[#457b9d]/20 hover:shadow-md"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -342,7 +472,7 @@ export default function UserManagementPage() {
                 </button>
 
                 <button
-                  onClick={() => (canViewPrivateBlocks ? setActiveList("following") : undefined)}
+                  onClick={() => handleOpenFollowList("following")}
                   className="rounded-lg border border-white/70 bg-white/88 px-4 py-4 text-left shadow-sm transition hover:border-[#457b9d]/20 hover:shadow-md"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -507,7 +637,20 @@ export default function UserManagementPage() {
         </div>
       </PageShell>
 
-      {activeList ? <PeopleDialog type={activeList} people={people} onClose={() => setActiveList(null)} /> : null}
+      {activeList ? (
+        <PeopleDialog
+          type={activeList}
+          people={followPeople}
+          total={followTotal}
+          loading={followListLoading}
+          currentUserId={user?.user_id}
+          canManageFollowing={Boolean(user?.user_id === profileId)}
+          pendingUserId={pendingFollowListUserId}
+          onFollow={handleFollowFromList}
+          onUnfollow={handleUnfollowFromList}
+          onClose={() => setActiveList(null)}
+        />
+      ) : null}
     </>
   );
 }

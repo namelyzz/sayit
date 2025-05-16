@@ -24,6 +24,20 @@ export interface UserProfile {
   is_self: boolean;
 }
 
+export interface UserFollowItem {
+  user_id: string;
+  user_name: string;
+  signature: string;
+  is_following: boolean;
+  is_followed_by: boolean;
+  is_mutual: boolean;
+}
+
+export interface UserFollowListResponse {
+  list: UserFollowItem[];
+  total: number;
+}
+
 export interface CommunitySummary {
   community_id: string;
   name: string;
@@ -189,6 +203,22 @@ class ApiClient {
     return this.request<{ is_following: boolean }>(`/users/${id}/follow`, {
       method: "DELETE",
     });
+  }
+
+  async getUserFollowers(id: string, params?: { page?: number; size?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set("page", params.page.toString());
+    if (params?.size) searchParams.set("size", params.size.toString());
+    const query = searchParams.toString();
+    return this.request<UserFollowListResponse>(`/users/${id}/followers${query ? `?${query}` : ""}`);
+  }
+
+  async getUserFollowing(id: string, params?: { page?: number; size?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set("page", params.page.toString());
+    if (params?.size) searchParams.set("size", params.size.toString());
+    const query = searchParams.toString();
+    return this.request<UserFollowListResponse>(`/users/${id}/following${query ? `?${query}` : ""}`);
   }
 
   async getCommunities() {

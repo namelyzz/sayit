@@ -48,3 +48,17 @@ func (UserFollow) TableName() string {
 type UserFollowStatus struct {
 	IsFollowing bool `json:"is_following"`
 }
+
+type UserFollowItem struct {
+	UserID       SnowflakeID `json:"user_id" gorm:"column:user_id"`
+	Username     string      `json:"user_name" gorm:"column:username"`
+	Signature    string      `json:"signature" gorm:"column:signature"`
+	IsFollowing  bool        `json:"is_following" gorm:"-"`
+	IsFollowedBy bool        `json:"is_followed_by" gorm:"-"`
+	IsMutual     bool        `json:"is_mutual" gorm:"-"`
+}
+
+type UserFollowList struct {
+	List  []*UserFollowItem `json:"list"`
+	Total int64             `json:"total"`
+}

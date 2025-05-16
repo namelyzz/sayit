@@ -21,7 +21,9 @@ func SetupRouter(mode string) *gin.Engine {
 	v1.GET("/posts", controller.GetPostListHandler)                  // 帖子列表
 	v1.GET("/post_detail/:id", controller.GetPostDetailHandler)      // 帖子详情
 	v1.GET("/users/:id/posts", controller.GetUserPostsHandler)       // 用户发布的帖子
-	v1.GET("/users/:id", controller.GetUserProfileHandler)           // 用户公开资料
+	v1.GET("/users/:id/followers", controller.GetUserFollowersHandler)
+	v1.GET("/users/:id/following", controller.GetUserFollowingHandler)
+	v1.GET("/users/:id", controller.GetUserProfileHandler) // 用户公开资料
 
 	// 用户模块
 	v1.POST("/signup", controller.SignupHandler) // 注册

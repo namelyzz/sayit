@@ -312,3 +312,67 @@ func GetUserFollowStatusHandler(c *gin.Context) {
 
 	api.ResponseSuccess(c, &models.UserFollowStatus{IsFollowing: isFollowing})
 }
+
+// GetUserFollowersHandler 获取用户粉丝列表。
+// 路由: GET /api/v1/users/:id/followers
+func GetUserFollowersHandler(c *gin.Context) {
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+	page, size := parseFollowListPagination(c)
+
+	data, err := service.GetUserFollowers(c.Request.Context(), targetUserID, page, size, api.GetOptionalUserID(c))
+	if err != nil {
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
+			return
+		}
+		zap.L().Error("get user followers failed",
+			zap.Int64("target_user_id", targetUserID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, data)
+}
+
+// GetUserFollowingHandler 获取用户关注列表。
+// 路由: GET /api/v1/users/:id/following
+func GetUserFollowingHandler(c *gin.Context) {
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+	page, size := parseFollowListPagination(c)
+
+	data, err := service.GetUserFollowing(c.Request.Context(), targetUserID, page, size, api.GetOptionalUserID(c))
+	if err != nil {
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
+			return
+		}
+		zap.L().Error("get user following failed",
+			zap.Int64("target_user_id", targetUserID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, data)
+}
+
+func parseFollowListPagination(c *gin.Context) (int, int) {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil {
+		page = 1
+	}
+	size, err := strconv.Atoi(c.DefaultQuery("size", "50"))
+	if err != nil {
+		size = 50
+	}
+	return page, size
+}

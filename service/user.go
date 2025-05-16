@@ -15,6 +15,8 @@ import (
 
 const defaultUserSignature = "这个人很懒，还没有留下签名。"
 
+const maxUserFollowListSize = 50
+
 // SignUp 用户注册业务逻辑
 // 步骤: 检查用户名是否已存在 -> 生成雪花ID -> 构造用户对象 -> 密码加密后入库
 func SignUp(p *models.ParamSignUp) (err error) {
@@ -80,7 +82,7 @@ func GetUserProfile(ctx context.Context, currentUserID, targetUserID int64) (pro
 	}
 	isFollowing := false
 	if currentUserID != 0 && currentUserID != targetUserID {
-		isFollowing, err = mysql.IsFollowingUser(currentUserID, targetUserID)
+		isFollowing, err = isFollowingUserWithCache(ctx, currentUserID, targetUserID)
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +146,11 @@ func FollowUser(currentUserID, targetUserID int64) error {
 	if _, err := mysql.GetUserProfileByID(targetUserID); err != nil {
 		return err
 	}
-	return mysql.FollowUser(currentUserID, targetUserID)
+	if err := mysql.FollowUser(currentUserID, targetUserID); err != nil {
+		return err
+	}
+	_ = redis.FollowUserCache(context.Background(), currentUserID, targetUserID)
+	return nil
 }
 
 // UnfollowUser 取消关注用户。
@@ -155,7 +161,11 @@ func UnfollowUser(currentUserID, targetUserID int64) error {
 	if _, err := mysql.GetUserProfileByID(targetUserID); err != nil {
 		return err
 	}
-	return mysql.UnfollowUser(currentUserID, targetUserID)
+	if err := mysql.UnfollowUser(currentUserID, targetUserID); err != nil {
+		return err
+	}
+	_ = redis.UnfollowUserCache(context.Background(), currentUserID, targetUserID)
+	return nil
 }
 
 // IsFollowingUser 检查当前用户是否关注目标用户。
@@ -166,5 +176,74 @@ func IsFollowingUser(currentUserID, targetUserID int64) (bool, error) {
 	if _, err := mysql.GetUserProfileByID(targetUserID); err != nil {
 		return false, err
 	}
-	return mysql.IsFollowingUser(currentUserID, targetUserID)
+	return isFollowingUserWithCache(context.Background(), currentUserID, targetUserID)
+}
+
+// GetUserFollowers 获取用户粉丝列表。
+func GetUserFollowers(ctx context.Context, userID int64, page, size int, viewerID int64) (*models.UserFollowList, error) {
+	if _, err := mysql.GetUserProfileByID(userID); err != nil {
+		return nil, err
+	}
+	page, size = normalizeUserFollowPagination(page, size)
+	list, total, err := mysql.GetFollowers(userID, page, size)
+	if err != nil {
+		return nil, err
+	}
+	enrichUserFollowItems(ctx, list, viewerID)
+	return &models.UserFollowList{List: list, Total: total}, nil
+}
+
+// GetUserFollowing 获取用户关注列表。
+func GetUserFollowing(ctx context.Context, userID int64, page, size int, viewerID int64) (*models.UserFollowList, error) {
+	if _, err := mysql.GetUserProfileByID(userID); err != nil {
+		return nil, err
+	}
+	page, size = normalizeUserFollowPagination(page, size)
+	list, total, err := mysql.GetFollowing(userID, page, size)
+	if err != nil {
+		return nil, err
+	}
+	enrichUserFollowItems(ctx, list, viewerID)
+	return &models.UserFollowList{List: list, Total: total}, nil
+}
+
+func enrichUserFollowItems(ctx context.Context, list []*models.UserFollowItem, viewerID int64) {
+	if viewerID == 0 {
+		return
+	}
+	for _, item := range list {
+		itemID := int64(item.UserID)
+		if itemID == viewerID {
+			continue
+		}
+		item.IsFollowing, _ = isFollowingUserWithCache(ctx, viewerID, itemID)
+		item.IsFollowedBy, _ = isFollowingUserWithCache(ctx, itemID, viewerID)
+		item.IsMutual = item.IsFollowing && item.IsFollowedBy
+	}
+}
+
+func isFollowingUserWithCache(ctx context.Context, followerID, followingID int64) (bool, error) {
+	isFollowing, err := redis.IsFollowingUserCache(ctx, followerID, followingID)
+	if err == nil && isFollowing {
+		return true, nil
+	}
+
+	isFollowing, err = mysql.IsFollowingUser(followerID, followingID)
+	if err != nil {
+		return false, err
+	}
+	if isFollowing {
+		_ = redis.FollowUserCache(ctx, followerID, followingID)
+	}
+	return isFollowing, nil
+}
+
+func normalizeUserFollowPagination(page, size int) (int, int) {
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 || size > maxUserFollowListSize {
+		size = maxUserFollowListSize
+	}
+	return page, size
 }

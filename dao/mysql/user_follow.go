@@ -78,3 +78,49 @@ func CountFollowing(userID int64) (int64, error) {
 	}
 	return count, nil
 }
+
+// GetFollowers 获取关注 userID 的用户列表。
+func GetFollowers(userID int64, page, size int) ([]*models.UserFollowItem, int64, error) {
+	total, err := CountFollowers(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var users []*models.UserFollowItem
+	res := db.Table("users u").
+		Select("u.user_id", "u.username", "u.signature").
+		Joins("JOIN user_follow uf ON uf.follower_id = u.user_id").
+		Where("uf.following_id = ?", userID).
+		Order("uf.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Scan(&users)
+	if res.Error != nil {
+		zap.L().Error("get user followers failed", zap.Int64("user_id", userID), zap.Error(res.Error))
+		return nil, 0, res.Error
+	}
+	return users, total, nil
+}
+
+// GetFollowing 获取 userID 关注的用户列表。
+func GetFollowing(userID int64, page, size int) ([]*models.UserFollowItem, int64, error) {
+	total, err := CountFollowing(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var users []*models.UserFollowItem
+	res := db.Table("users u").
+		Select("u.user_id", "u.username", "u.signature").
+		Joins("JOIN user_follow uf ON uf.following_id = u.user_id").
+		Where("uf.follower_id = ?", userID).
+		Order("uf.create_time DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Scan(&users)
+	if res.Error != nil {
+		zap.L().Error("get user following failed", zap.Int64("user_id", userID), zap.Error(res.Error))
+		return nil, 0, res.Error
+	}
+	return users, total, nil
+}
