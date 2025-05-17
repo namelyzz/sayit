@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Clock3, Flame, PenLine } from "lucide-react";
 import PostCard from "@/components/ui/PostCard";
-import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import PageShell from "@/components/ui/PageShell";
 import { PostCardSkeleton } from "@/components/ui/Skeleton";
@@ -13,10 +12,11 @@ import { useAuth } from "@/context/AuthContext";
 import { cn, getErrorMessage } from "@/lib/utils";
 
 type SortBy = "create_time" | "score";
+const PAGE_SIZE = 5;
 
 function normalizePosts(data: PostsResponse | PostListItem[] | undefined) {
-  if (!data) return { list: [] as PostListItem[], total: 0 };
-  if (Array.isArray(data)) return { list: data, total: data.length };
+  if (!data) return { list: [] as PostListItem[], total: undefined as number | undefined };
+  if (Array.isArray(data)) return { list: data, total: undefined as number | undefined };
   return { list: data.list ?? [], total: data.total ?? 0 };
 }
 
@@ -24,30 +24,50 @@ export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("create_time");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState("");
   const [needLogin, setNeedLogin] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const requestIdRef = useRef(0);
+  const isFetchingRef = useRef(false);
 
   useEffect(() => {
     if (authLoading) return;
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const isFirstPage = page === 1;
 
     const fetchPosts = async () => {
-      setLoading(true);
+      isFetchingRef.current = true;
+      setLoading(isFirstPage);
+      setLoadingMore(!isFirstPage);
       setError("");
       try {
         const response = await apiClient.getPosts({
           page,
-          size: 10,
+          size: PAGE_SIZE,
           sort_by: sortBy,
           order: "desc",
         });
+        if (requestId !== requestIdRef.current) return;
         const normalized = normalizePosts(response.data);
-        setPosts(normalized.list);
-        setTotal(normalized.total);
+        setPosts((currentPosts) => {
+          if (isFirstPage) return normalized.list;
+
+          const existingIds = new Set(currentPosts.map((post) => post.post_id));
+          const nextPosts = normalized.list.filter((post) => !existingIds.has(post.post_id));
+          return [...currentPosts, ...nextPosts];
+        });
+        setTotal(normalized.total ?? 0);
+        setHasMore(normalized.list.length === PAGE_SIZE && (normalized.total === undefined || page * PAGE_SIZE < normalized.total));
         setNeedLogin(false);
       } catch (err) {
+        if (requestId !== requestIdRef.current) return;
+        setHasMore(false);
         if (!user) {
           setNeedLogin(true);
           setPosts([]);
@@ -56,14 +76,43 @@ export default function Home() {
           setPosts([]);
         }
       } finally {
-        setLoading(false);
+        if (requestId === requestIdRef.current) {
+          isFetchingRef.current = false;
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     };
 
     fetchPosts();
   }, [sortBy, page, user, authLoading]);
 
-  const hasNextPage = useMemo(() => posts.length === 10 && (total === 0 || page * 10 < total), [page, posts, total]);
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || loading || loadingMore || !hasMore || needLogin || error) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting || isFetchingRef.current) return;
+        isFetchingRef.current = true;
+        setPage((value) => value + 1);
+      },
+      { rootMargin: "240px 0px" }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loading, loadingMore, hasMore, needLogin, error]);
+
+  const resetFeed = (nextSortBy: SortBy) => {
+    if (nextSortBy === sortBy && page === 1) return;
+
+    setSortBy(nextSortBy);
+    setPosts([]);
+    setTotal(0);
+    setHasMore(true);
+    setPage(1);
+  };
 
   return (
     <PageShell>
@@ -84,10 +133,7 @@ export default function Home() {
 
         <div className="mt-5 inline-flex rounded-lg bg-surface-soft p-1">
           <button
-            onClick={() => {
-              setSortBy("create_time");
-              setPage(1);
-            }}
+            onClick={() => resetFeed("create_time")}
             className={cn(
               "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition",
               sortBy === "create_time" ? "bg-surface text-foreground" : "text-muted hover:text-foreground"
@@ -97,10 +143,7 @@ export default function Home() {
             最新
           </button>
           <button
-            onClick={() => {
-              setSortBy("score");
-              setPage(1);
-            }}
+            onClick={() => resetFeed("score")}
             className={cn(
               "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition",
               sortBy === "score" ? "bg-surface text-foreground" : "text-muted hover:text-foreground"
@@ -135,6 +178,12 @@ export default function Home() {
           : posts.map((post) => <PostCard key={post.post_id} post={post} />)}
       </div>
 
+      {!loading && loadingMore ? (
+        <div className="space-y-3">
+          {Array.from({ length: 2 }).map((_, index) => <PostCardSkeleton key={`loading-more-${index}`} />)}
+        </div>
+      ) : null}
+
       {!loading && !needLogin && posts.length === 0 ? (
         <EmptyState
           title="暂时还没有帖子"
@@ -150,15 +199,9 @@ export default function Home() {
         />
       ) : null}
 
-      {total > 10 || page > 1 ? (
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <Button variant="outline" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-            上一页
-          </Button>
-          <span className="text-sm font-medium text-muted-strong">第 {page} 页</span>
-          <Button variant="outline" disabled={!hasNextPage} onClick={() => setPage((value) => value + 1)}>
-            下一页
-          </Button>
+      {!loading && !needLogin && posts.length > 0 ? (
+        <div ref={loadMoreRef} className="flex justify-center py-3 text-sm text-muted-strong">
+          {hasMore ? "继续向下滚动加载更多" : total > PAGE_SIZE || page > 1 ? "已经到底了" : null}
         </div>
       ) : null}
     </PageShell>
