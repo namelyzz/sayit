@@ -31,10 +31,10 @@ export default function Layout({
 
           <div className="min-w-0 bg-background px-4 pb-24 pt-5 md:px-6 lg:min-h-[calc(100vh-4rem)] lg:rounded-tl-[24px] lg:pb-10">
             <div
-              className={`mx-auto grid w-full gap-6 ${
+              className={`grid w-full gap-6 ${
                 shouldShowRightSidebar
-                  ? "max-w-[1104px] xl:grid-cols-[minmax(0,760px)_320px]"
-                  : "max-w-[1120px]"
+                  ? "xl:grid-cols-[minmax(0,1fr)_360px]"
+                  : "mx-auto max-w-[1120px]"
               }`}
             >
               <main className="min-w-0">{children}</main>

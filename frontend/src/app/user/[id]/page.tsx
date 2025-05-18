@@ -31,6 +31,45 @@ import { cn, getErrorMessage } from "@/lib/utils";
 
 type ProfileListType = "followers" | "following" | null;
 
+const profileBadges = [
+  {
+    icon: "💗",
+    title: "欢迎",
+    description: "收到第一个赞，说明你的表达已经被人看见。",
+    tone: "from-rose-100 via-white to-rose-50 text-rose-500",
+  },
+  {
+    icon: "🪐",
+    title: "初次远行",
+    description: "加入第二个社区，开始在不同角落留下足迹。",
+    tone: "from-sky-100 via-white to-cyan-50 text-sky-600",
+  },
+  {
+    icon: "🔥",
+    title: "火花",
+    description: "一篇帖子引起热烈讨论，点亮了首页的气氛。",
+    tone: "from-amber-100 via-white to-orange-50 text-orange-500",
+  },
+  {
+    icon: "🌱",
+    title: "发芽",
+    description: "写下第一篇帖子，让个人主页不再空白。",
+    tone: "from-emerald-100 via-white to-lime-50 text-emerald-600",
+  },
+  {
+    icon: "🎧",
+    title: "认真倾听",
+    description: "留下第一条评论，正式加入别人的对话。",
+    tone: "from-violet-100 via-white to-fuchsia-50 text-violet-600",
+  },
+  {
+    icon: "🏆",
+    title: "常驻居民",
+    description: "连续活跃了一段时间，已经成了社区里的熟面孔。",
+    tone: "from-yellow-100 via-white to-amber-50 text-yellow-600",
+  },
+] as const;
+
 function normalizePosts(data: PostsResponse | PostListItem[] | undefined) {
   if (!data) return [] as PostListItem[];
   return Array.isArray(data) ? data : data.list ?? [];
@@ -89,6 +128,36 @@ function InfoItem({
         <span>{label}</span>
       </div>
       <p className="mt-3 text-lg font-semibold text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function BadgeCabinet() {
+  return (
+    <div className="rounded-[24px] border border-[#d6c2a3] bg-[linear-gradient(180deg,#f4ead8_0%,#ebdcc5_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_24px_rgba(123,87,42,0.08)]">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {profileBadges.map((badge) => (
+          <div key={badge.title} className="group relative aspect-square">
+            <div className="absolute inset-0 rounded-[18px] border border-[#b9966c] bg-[linear-gradient(135deg,rgba(255,255,255,0.5),rgba(148,111,71,0.08))] shadow-[inset_0_1px_0_rgba(255,255,255,0.65),inset_0_-8px_14px_rgba(134,97,57,0.08)] transition duration-200 group-hover:border-[#8e6a42] group-hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_14px_24px_rgba(94,64,31,0.18)] group-hover:brightness-105" />
+            <div className="absolute inset-[10px] rounded-[14px] border border-white/70 bg-[rgba(255,248,238,0.92)] transition group-hover:bg-white">
+              <div
+                className={cn(
+                  "flex h-full items-center justify-center rounded-[13px] bg-gradient-to-br text-3xl shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition duration-200 group-hover:scale-[1.04]",
+                  badge.tone
+                )}
+              >
+                <span aria-hidden="true">{badge.icon}</span>
+              </div>
+            </div>
+
+            <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-3 w-52 -translate-x-1/2 rounded-2xl border border-border bg-white px-4 py-3 text-left opacity-0 shadow-[0_18px_40px_rgba(15,23,42,0.14)] transition duration-200 group-hover:translate-y-1 group-hover:opacity-100">
+              <div className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-l border-t border-border bg-white" />
+              <p className="text-sm font-semibold text-foreground">{badge.title}</p>
+              <p className="mt-1 text-sm leading-6 text-muted-strong">{badge.description}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -431,7 +500,6 @@ export default function UserManagementPage() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="primary">个人中心</Badge>
-                  <Badge tone="neutral">前端预览</Badge>
                 </div>
 
                 <div className="mt-5 flex items-start gap-4">
@@ -515,7 +583,7 @@ export default function UserManagementPage() {
                 signatureSaved ? (
                   <span className="text-xs font-medium text-primary">已保存</span>
                 ) : (
-                  <span className="text-xs font-medium text-muted">来自后端资料</span>
+                  <span className="text-xs font-medium text-muted">编辑个人介绍</span>
                 )
               }
             >
@@ -529,7 +597,7 @@ export default function UserManagementPage() {
                     placeholder="写一句让别人认识你的话。"
                   />
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm text-muted">最多 120 个字符，保存后会同步到后端资料。</p>
+                    <p className="text-sm text-muted">最多 120 个字符，写一句让别人记住你的话。</p>
                     <Button onClick={handleSaveSignature} disabled={savingSignature || !profile}>
                       <PencilLine className="h-4 w-4" />
                       {savingSignature ? "保存中" : "保存签名"}
@@ -544,25 +612,13 @@ export default function UserManagementPage() {
             </SectionCard>
           </div>
 
-          <SectionCard title="关系预览">
-            {canViewPrivateBlocks ? (
-              <div className="space-y-3">
-                <div className="rounded-lg border border-border bg-surface-soft px-4 py-4">
-                  <p className="text-sm font-semibold text-foreground">粉丝</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-strong">
-                    点击顶部统计卡，可查看关注你的用户列表。
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border bg-surface-soft px-4 py-4">
-                  <p className="text-sm font-semibold text-foreground">关注</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-strong">
-                    点击顶部统计卡，可查看你关注的用户列表。
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <LoginLockedCard title="关系信息已锁定" description="粉丝、关注列表属于登录后信息。登录后可继续查看用户关系详情。" />
-            )}
+          <SectionCard title="徽章柜">
+            <div className="space-y-4">
+              <p className="text-sm leading-6 text-muted-strong">
+                用几枚小徽章收纳你的社区旅程。把鼠标移到格子上，可以看看每枚徽章代表什么。
+              </p>
+              <BadgeCabinet />
+            </div>
           </SectionCard>
         </div>
 
