@@ -149,7 +149,7 @@ func TestCreatePostReturnsSuccessWhenImmediateRedisSyncFails(t *testing.T) {
 	var markRetryCalled bool
 	createPostWithOutboxFunc = func(ctx context.Context, p *models.Post, event *models.OutboxEvent) (int64, error) {
 		outboxCreated = true
-		assert.Equal(t, int64(101), p.PostID)
+		assert.Equal(t, models.SnowflakeID(101), p.PostID)
 		assert.Equal(t, now, p.CreateTime)
 		assert.Equal(t, models.EventTypePostCreated, event.EventType)
 		return 9, nil

@@ -18,9 +18,9 @@ func TestReorderPostListItems_ReordersByRequestedIDs(t *testing.T) {
 	ordered := reorderPostListItems(postIDs, items)
 
 	assert.Len(t, ordered, 3)
-	assert.Equal(t, int64(3), ordered[0].PostID)
-	assert.Equal(t, int64(1), ordered[1].PostID)
-	assert.Equal(t, int64(2), ordered[2].PostID)
+	assert.Equal(t, models.SnowflakeID(3), ordered[0].PostID)
+	assert.Equal(t, models.SnowflakeID(1), ordered[1].PostID)
+	assert.Equal(t, models.SnowflakeID(2), ordered[2].PostID)
 }
 
 func TestReorderPostListItems_SkipsMissingIDs(t *testing.T) {
@@ -33,8 +33,8 @@ func TestReorderPostListItems_SkipsMissingIDs(t *testing.T) {
 	ordered := reorderPostListItems(postIDs, items)
 
 	assert.Len(t, ordered, 2)
-	assert.Equal(t, int64(2), ordered[0].PostID)
-	assert.Equal(t, int64(1), ordered[1].PostID)
+	assert.Equal(t, models.SnowflakeID(2), ordered[0].PostID)
+	assert.Equal(t, models.SnowflakeID(1), ordered[1].PostID)
 }
 
 func TestReorderPostListItems_IgnoresUnrequestedItems(t *testing.T) {
@@ -48,8 +48,8 @@ func TestReorderPostListItems_IgnoresUnrequestedItems(t *testing.T) {
 	ordered := reorderPostListItems(postIDs, items)
 
 	assert.Len(t, ordered, 2)
-	assert.Equal(t, int64(2), ordered[0].PostID)
-	assert.Equal(t, int64(1), ordered[1].PostID)
+	assert.Equal(t, models.SnowflakeID(2), ordered[0].PostID)
+	assert.Equal(t, models.SnowflakeID(1), ordered[1].PostID)
 }
 
 func TestReorderPostListItems_EmptyInput(t *testing.T) {

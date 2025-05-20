@@ -41,6 +41,9 @@ func SetupRouter(mode string) *gin.Engine {
 		v1.POST("/create_post", controller.CreatePostHandler)
 		v1.POST("/vote", controller.PostVoteController)
 
+		// 评论相关
+		v1.POST("/comment", controller.CreateCommentHandler)
+
 		// 关注社区相关
 		v1.POST("/follow", controller.FollowCommunityHandler)
 		v1.POST("/unfollow", controller.UnfollowCommunityHandler)

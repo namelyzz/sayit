@@ -8,6 +8,7 @@ var (
 	ErrorUserNotLogin = errors.New("用户未登录")
 	ErrorInvalidLogin = errors.New("用户名或密码错误")
 	ErrorInvalidID    = errors.New("无效的ID")
+	ErrorInvalidParam = errors.New("无效的参数")
 	ErrorFollowSelf   = errors.New("不能关注自己")
 
 	ErrorVoteTimeExpire = errors.New("投票时间已过")
