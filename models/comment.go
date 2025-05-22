@@ -37,3 +37,9 @@ type ParamCreateComment struct {
 	ParentID string `json:"parent_id"`                              // 父评论ID（0或不传表示顶级评论）
 	Content  string `json:"content" binding:"required,max=1024"`    // 评论内容，最长1024字符
 }
+
+// CommentListResponse 评论列表响应
+type CommentListResponse struct {
+	List  []*CommentDetail `json:"list"`  // 评论列表
+	Total int64            `json:"total"` // 顶级评论总数
+}

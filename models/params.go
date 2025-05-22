@@ -145,3 +145,20 @@ type ParamVote struct {
 	// 注意: direction 的 json tag 有 ",string" 修饰，表示 JSON 中可以传字符串 "1" 或数字 1
 	// binding:"oneof=1 0 -1" 限制只能是这三个值之一
 }
+
+// ParamCommentList 获取评论列表请求参数
+// 通过 URL 查询参数传递，例如: /api/v1/post/123/comments?page=1&size=20
+type ParamCommentList struct {
+	Page int `json:"page" form:"page"` // 页码（从1开始）
+	Size int `json:"size" form:"size"` // 每页数量（最大50）
+}
+
+// ValidateAndSetDefaults 校验评论列表参数并设置默认值
+func (p *ParamCommentList) ValidateAndSetDefaults() {
+	if p.Page <= 0 {
+		p.Page = 1
+	}
+	if p.Size <= 0 || p.Size > MaxPageSize {
+		p.Size = 20 // 评论默认每页20条
+	}
+}
