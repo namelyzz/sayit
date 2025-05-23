@@ -16,6 +16,7 @@ func restoreCommentTestHooks() func() {
 	origGetPostByID := getPostByIDFunc
 	origGetCommentByID := getCommentByIDFunc
 	origCreateComment := createCommentFunc
+	origSoftDeleteComment := softDeleteCommentFunc
 	origGetTopLevelComments := getTopLevelCommentsFunc
 	origCountTopLevelComments := countTopLevelCommentsFunc
 	origGetChildCommentsByParent := getChildCommentsByParentFunc
@@ -26,6 +27,7 @@ func restoreCommentTestHooks() func() {
 		getPostByIDFunc = origGetPostByID
 		getCommentByIDFunc = origGetCommentByID
 		createCommentFunc = origCreateComment
+		softDeleteCommentFunc = origSoftDeleteComment
 		getTopLevelCommentsFunc = origGetTopLevelComments
 		countTopLevelCommentsFunc = origCountTopLevelComments
 		getChildCommentsByParentFunc = origGetChildCommentsByParent
@@ -451,4 +453,140 @@ func TestGetCommentTree_Pagination(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(10), result.Total)
 	assert.Len(t, result.List, 1)
+}
+
+// ========== DeleteComment 测试 ==========
+
+func TestDeleteComment_Success_ByCommentAuthor(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42, // 评论作者
+			Status:    1,
+		}, nil
+	}
+
+	var deletedID int64
+	softDeleteCommentFunc = func(commentID int64) error {
+		deletedID = commentID
+		return nil
+	}
+
+	err := DeleteComment(context.Background(), 42, 1001) // userID = 评论作者
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(1001), deletedID)
+}
+
+func TestDeleteComment_Success_ByPostAuthor(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42, // 评论作者
+			Status:    1,
+		}, nil
+	}
+	getPostByIDFunc = func(postID int64) (*models.Post, error) {
+		return &models.Post{
+			PostID:   100,
+			AuthorID: 99, // 帖子作者
+		}, nil
+	}
+
+	var deletedID int64
+	softDeleteCommentFunc = func(commentID int64) error {
+		deletedID = commentID
+		return nil
+	}
+
+	err := DeleteComment(context.Background(), 99, 1001) // userID = 帖子作者
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(1001), deletedID)
+}
+
+func TestDeleteComment_CommentNotFound(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return nil, errors.New("record not found")
+	}
+
+	err := DeleteComment(context.Background(), 42, 1001)
+
+	require.Error(t, err)
+	assert.Equal(t, "record not found", err.Error())
+}
+
+func TestDeleteComment_AlreadyDeleted(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    2, // 已删除
+		}, nil
+	}
+
+	softDeleteCommentFunc = func(commentID int64) error {
+		t.Fatal("should not call soft delete for already deleted comment")
+		return nil
+	}
+
+	err := DeleteComment(context.Background(), 42, 1001)
+
+	require.NoError(t, err) // 幂等返回成功
+}
+
+func TestDeleteComment_NoPermission(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42, // 评论作者
+			Status:    1,
+		}, nil
+	}
+	getPostByIDFunc = func(postID int64) (*models.Post, error) {
+		return &models.Post{
+			PostID:   100,
+			AuthorID: 99, // 帖子作者
+		}, nil
+	}
+
+	err := DeleteComment(context.Background(), 77, 1001) // userID = 既不是评论作者也不是帖子作者
+
+	require.Error(t, err)
+	assert.Equal(t, "没有权限执行此操作", err.Error())
+}
+
+func TestDeleteComment_SoftDeleteFails(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	softDeleteCommentFunc = func(commentID int64) error {
+		return errors.New("db error")
+	}
+
+	err := DeleteComment(context.Background(), 42, 1001)
+
+	require.Error(t, err)
+	assert.Equal(t, "db error", err.Error())
 }

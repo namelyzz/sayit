@@ -11,12 +11,14 @@ import (
 )
 
 const maxCommentDepth = 10 // 最大嵌套深度
+const deletedContent = "[已删除]" // 已删除评论的占位内容
 
 // 以下变量可被测试替换（mock），方便单元测试
 var (
 	getPostByIDFunc               = mysql.GetPostByID               // 查询帖子
 	getCommentByIDFunc            = mysql.GetCommentByID            // 查询评论
 	createCommentFunc             = mysql.CreateComment             // 创建评论
+	softDeleteCommentFunc         = mysql.SoftDeleteComment         // 软删除评论
 	getTopLevelCommentsFunc       = mysql.GetTopLevelComments       // 获取顶级评论
 	countTopLevelCommentsFunc     = mysql.CountTopLevelComments     // 统计顶级评论数量
 	getChildCommentsByParentFunc  = mysql.GetChildCommentsByParentIDs  // 获取子评论
@@ -134,7 +136,10 @@ func GetCommentTree(ctx context.Context, postID int64, p *models.ParamCommentLis
 		return nil, err
 	}
 
-	// 5. 回填点赞状态
+	// 5. 处理已删除评论的内容
+	markDeletedContent(details)
+
+	// 6. 回填点赞状态
 	fillCommentLiked(ctx, details, currentUserID)
 
 	return &models.CommentListResponse{
@@ -241,6 +246,53 @@ func setCommentLiked(details []*models.CommentDetail, likedMap map[int64]bool) {
 		d.IsLiked = likedMap[int64(d.CommentID)]
 		if len(d.Children) > 0 {
 			setCommentLiked(d.Children, likedMap)
+		}
+	}
+}
+
+// DeleteComment 删除评论的业务逻辑
+// 权限：帖子作者可删除任意评论，评论作者可删除自己的评论
+// 策略：软删除（status=2），保留子评论结构
+func DeleteComment(ctx context.Context, userID, commentID int64) error {
+	// 1. 查询评论是否存在
+	comment, err := getCommentByIDFunc(commentID)
+	if err != nil {
+		return err
+	}
+
+	// 2. 已删除的评论，幂等返回成功
+	if comment.Status == 2 {
+		return nil
+	}
+
+	// 3. 权限校验：评论作者 或 帖子作者
+	isCommentAuthor := int64(comment.AuthorID) == userID
+	isPostAuthor := false
+	if !isCommentAuthor {
+		post, err := getPostByIDFunc(int64(comment.PostID))
+		if err != nil {
+			return err
+		}
+		isPostAuthor = int64(post.AuthorID) == userID
+	}
+
+	if !isCommentAuthor && !isPostAuthor {
+		return api.ErrorNoPermission
+	}
+
+	// 4. 软删除
+	return softDeleteCommentFunc(commentID)
+}
+
+// markDeletedContent 递归处理已删除评论的内容
+// 将 status=2 的评论的 content 替换为 [已删除]
+func markDeletedContent(details []*models.CommentDetail) {
+	for _, d := range details {
+		if d.Status == 2 {
+			d.Content = deletedContent
+		}
+		if len(d.Children) > 0 {
+			markDeletedContent(d.Children)
 		}
 	}
 }

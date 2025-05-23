@@ -88,3 +88,44 @@ func GetCommentListHandler(c *gin.Context) {
 	// 5. 返回评论树
 	api.ResponseSuccess(c, data)
 }
+
+// DeleteCommentHandler 删除评论接口
+// 路由: DELETE /api/v1/comment/:id (需要JWT认证)
+// 权限: 帖子作者或评论作者可删除
+// 流程: 解析路径参数 -> 获取用户ID -> 调用 service.DeleteComment -> 返回结果
+func DeleteCommentHandler(c *gin.Context) {
+	// 1. 解析评论ID
+	commentIDStr := c.Param("id")
+	commentID, err := strconv.ParseInt(commentIDStr, 10, 64)
+	if err != nil {
+		zap.L().Error("delete comment with invalid id",
+			zap.String("comment_id", commentIDStr),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	// 2. 获取当前登录用户ID
+	userID, err := api.GetCurrentUserID(c)
+	if err != nil {
+		api.ResponseError(c, api.CodeNeedLogin)
+		return
+	}
+
+	// 3. 调用 service 层执行删除逻辑
+	if err := service.DeleteComment(c.Request.Context(), userID, commentID); err != nil {
+		if err == api.ErrorNoPermission {
+			api.ResponseErrorWithMsg(c, api.CodeInvalidParam, err.Error())
+			return
+		}
+		zap.L().Error("service.DeleteComment() failed",
+			zap.Int64("commentID", commentID),
+			zap.Int64("userID", userID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	// 4. 删除成功
+	api.ResponseSuccess(c, nil)
+}

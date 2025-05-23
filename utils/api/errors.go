@@ -10,6 +10,7 @@ var (
 	ErrorInvalidID    = errors.New("无效的ID")
 	ErrorInvalidParam = errors.New("无效的参数")
 	ErrorFollowSelf   = errors.New("不能关注自己")
+	ErrorNoPermission = errors.New("没有权限执行此操作")
 
 	ErrorVoteTimeExpire = errors.New("投票时间已过")
 	ErrorVoteRepeated   = errors.New("重复的投票")

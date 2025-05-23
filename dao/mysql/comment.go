@@ -88,7 +88,22 @@ func GetChildCommentsByParentIDs(parentIDs []int64) ([]*CommentWithAuthor, error
 	return comments, nil
 }
 
-// CountChildCommentsByParentIDs 批量统计指定父评论的子评论数量
+// SoftDeleteComment 软删除评论，将 status 设为 2
+func SoftDeleteComment(commentID int64) error {
+	res := db.Model(&models.Comment{}).
+		Where("comment_id = ? AND status = 1", commentID).
+		Update("status", 2)
+	if res.Error != nil {
+		zap.L().Error("soft delete comment failed",
+			zap.Int64("comment_id", commentID),
+			zap.Error(res.Error))
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil // 评论不存在或已删除，不返回错误（幂等）
+	}
+	return nil
+}
 func CountChildCommentsByParentIDs(parentIDs []int64) (map[int64]int64, error) {
 	if len(parentIDs) == 0 {
 		return map[int64]int64{}, nil
