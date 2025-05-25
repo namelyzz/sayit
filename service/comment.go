@@ -19,10 +19,15 @@ var (
 	getCommentByIDFunc            = mysql.GetCommentByID            // 查询评论
 	createCommentFunc             = mysql.CreateComment             // 创建评论
 	softDeleteCommentFunc         = mysql.SoftDeleteComment         // 软删除评论
+	incrCommentLikeCountFunc      = mysql.IncrCommentLikeCount      // 评论点赞数+1
 	getTopLevelCommentsFunc       = mysql.GetTopLevelComments       // 获取顶级评论
 	countTopLevelCommentsFunc     = mysql.CountTopLevelComments     // 统计顶级评论数量
 	getChildCommentsByParentFunc  = mysql.GetChildCommentsByParentIDs  // 获取子评论
 	countChildCommentsByParentFunc = mysql.CountChildCommentsByParentIDs // 统计子评论数量
+
+	commentLikeFunc   = redis.CommentLikeComment   // Redis 点赞
+	commentUnlikeFunc = redis.CommentUnlikeComment  // Redis 取消点赞
+	isCommentLikedFunc = redis.IsCommentLikedByUser // Redis 检查点赞
 )
 
 // CreateComment 创建评论的业务逻辑
@@ -295,4 +300,52 @@ func markDeletedContent(details []*models.CommentDetail) {
 			markDeletedContent(d.Children)
 		}
 	}
+}
+
+// const for like retry
+const likeRetryCount = 1
+
+// LikeComment 点赞评论的业务逻辑
+// 幂等设计 + 乐观重试：
+// 1. 查询评论是否存在且未删除
+// 2. Redis SADD（幂等，已存在返回 0）
+// 3. 如果 SADD 返回 0 → 已点赞，返回重复错误
+// 4. 如果 SADD 返回 1 → 新点赞，MySQL INCR like_count（失败重试 1 次）
+func LikeComment(ctx context.Context, userID, commentID int64) error {
+	// 1. 查询评论是否存在
+	comment, err := getCommentByIDFunc(commentID)
+	if err != nil {
+		return err
+	}
+
+	// 2. 检查评论是否已删除
+	if comment.Status == 2 {
+		return api.ErrorInvalidParam
+	}
+
+	// 3. Redis SADD（幂等）
+	added, err := commentLikeFunc(ctx, commentID, userID)
+	if err != nil {
+		return err
+	}
+
+	// 4. 如果返回 0，说明已点赞
+	if !added {
+		return api.ErrorLikeRepeated
+	}
+
+	// 5. MySQL INCR like_count（乐观重试）
+	for i := 0; i <= likeRetryCount; i++ {
+		if err := incrCommentLikeCountFunc(commentID); err == nil {
+			return nil
+		}
+		// 最后一次重试仍失败，记录日志但不返回错误
+		if i == likeRetryCount {
+			zap.L().Error("incr comment like_count failed after retry",
+				zap.Int64("comment_id", commentID),
+				zap.Int64("user_id", userID))
+		}
+	}
+
+	return nil
 }

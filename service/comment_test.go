@@ -17,10 +17,14 @@ func restoreCommentTestHooks() func() {
 	origGetCommentByID := getCommentByIDFunc
 	origCreateComment := createCommentFunc
 	origSoftDeleteComment := softDeleteCommentFunc
+	origIncrCommentLikeCount := incrCommentLikeCountFunc
 	origGetTopLevelComments := getTopLevelCommentsFunc
 	origCountTopLevelComments := countTopLevelCommentsFunc
 	origGetChildCommentsByParent := getChildCommentsByParentFunc
 	origCountChildCommentsByParent := countChildCommentsByParentFunc
+	origCommentLike := commentLikeFunc
+	origCommentUnlike := commentUnlikeFunc
+	origIsCommentLiked := isCommentLikedFunc
 	origGenID := genIDFunc
 
 	return func() {
@@ -28,10 +32,14 @@ func restoreCommentTestHooks() func() {
 		getCommentByIDFunc = origGetCommentByID
 		createCommentFunc = origCreateComment
 		softDeleteCommentFunc = origSoftDeleteComment
+		incrCommentLikeCountFunc = origIncrCommentLikeCount
 		getTopLevelCommentsFunc = origGetTopLevelComments
 		countTopLevelCommentsFunc = origCountTopLevelComments
 		getChildCommentsByParentFunc = origGetChildCommentsByParent
 		countChildCommentsByParentFunc = origCountChildCommentsByParent
+		commentLikeFunc = origCommentLike
+		commentUnlikeFunc = origCommentUnlike
+		isCommentLikedFunc = origIsCommentLiked
 		genIDFunc = origGenID
 	}
 }
@@ -589,4 +597,165 @@ func TestDeleteComment_SoftDeleteFails(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, "db error", err.Error())
+}
+
+// ========== LikeComment 测试 ==========
+
+func TestLikeComment_Success(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	commentLikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) {
+		assert.Equal(t, int64(1001), commentID)
+		assert.Equal(t, int64(42), userID)
+		return true, nil // 新点赞
+	}
+	var incrCalled bool
+	incrCommentLikeCountFunc = func(commentID int64) error {
+		incrCalled = true
+		assert.Equal(t, int64(1001), commentID)
+		return nil
+	}
+
+	err := LikeComment(context.Background(), 42, 1001)
+
+	require.NoError(t, err)
+	assert.True(t, incrCalled)
+}
+
+func TestLikeComment_CommentNotFound(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return nil, errors.New("record not found")
+	}
+
+	err := LikeComment(context.Background(), 42, 1001)
+
+	require.Error(t, err)
+	assert.Equal(t, "record not found", err.Error())
+}
+
+func TestLikeComment_CommentDeleted(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    2, // 已删除
+		}, nil
+	}
+
+	err := LikeComment(context.Background(), 42, 1001)
+
+	require.Error(t, err)
+	assert.Equal(t, "无效的参数", err.Error())
+}
+
+func TestLikeComment_AlreadyLiked(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	commentLikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) {
+		return false, nil // 已点赞过
+	}
+	incrCommentLikeCountFunc = func(commentID int64) error {
+		t.Fatal("should not call incr for already liked comment")
+		return nil
+	}
+
+	err := LikeComment(context.Background(), 42, 1001)
+
+	require.Error(t, err)
+	assert.Equal(t, "重复的点赞", err.Error())
+}
+
+func TestLikeComment_RedisFails(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	commentLikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) {
+		return false, errors.New("redis error")
+	}
+
+	err := LikeComment(context.Background(), 42, 1001)
+
+	require.Error(t, err)
+	assert.Equal(t, "redis error", err.Error())
+}
+
+func TestLikeComment_MySQLFailsButNoError(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	commentLikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) {
+		return true, nil // 新点赞
+	}
+	incrCommentLikeCountFunc = func(commentID int64) error {
+		return errors.New("db error") // MySQL 失败
+	}
+
+	// 即使 MySQL 失败，点赞仍然成功（Redis 已记录）
+	err := LikeComment(context.Background(), 42, 1001)
+
+	require.NoError(t, err)
+}
+
+func TestLikeComment_MySQLFailsFirstThenRetrySucceeds(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	commentLikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) {
+		return true, nil
+	}
+	callCount := 0
+	incrCommentLikeCountFunc = func(commentID int64) error {
+		callCount++
+		if callCount == 1 {
+			return errors.New("db error") // 第一次失败
+		}
+		return nil // 重试成功
+	}
+
+	err := LikeComment(context.Background(), 42, 1001)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, callCount) // 调用了 2 次
 }

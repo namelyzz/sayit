@@ -45,6 +45,7 @@ func SetupRouter(mode string) *gin.Engine {
 		// 评论相关
 		v1.POST("/comment", controller.CreateCommentHandler)
 		v1.DELETE("/comment/:id", controller.DeleteCommentHandler)
+		v1.POST("/comment/:id/like", controller.LikeCommentHandler)
 
 		// 关注社区相关
 		v1.POST("/follow", controller.FollowCommunityHandler)

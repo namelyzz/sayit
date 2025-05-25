@@ -7,12 +7,15 @@ import (
 )
 
 // CommentLikeComment 为评论点赞
-// 使用 Redis Set 存储点赞用户，同时使用 INCRBY 更新帖子评论计数
-func CommentLikeComment(ctx context.Context, commentID, userID int64) error {
-	pipe := client.TxPipeline()
-	pipe.SAdd(ctx, getRedisKey(KeyCommentLikedPF+strconv.FormatInt(commentID, 10)), userID)
-	_, err := pipe.Exec(ctx)
-	return err
+// 使用 Redis Set 存储点赞用户
+// 返回值: (added, error) - added=true 表示新点赞，added=false 表示已点赞过
+func CommentLikeComment(ctx context.Context, commentID, userID int64) (bool, error) {
+	key := getRedisKey(KeyCommentLikedPF + strconv.FormatInt(commentID, 10))
+	added, err := client.SAdd(ctx, key, userID).Result()
+	if err != nil {
+		return false, err
+	}
+	return added == 1, nil
 }
 
 // CommentUnlikeComment 取消评论点赞

@@ -129,3 +129,43 @@ func DeleteCommentHandler(c *gin.Context) {
 	// 4. 删除成功
 	api.ResponseSuccess(c, nil)
 }
+
+// LikeCommentHandler 点赞评论接口
+// 路由: POST /api/v1/comment/:id/like (需要JWT认证)
+// 流程: 解析路径参数 -> 获取用户ID -> 调用 service.LikeComment -> 返回结果
+func LikeCommentHandler(c *gin.Context) {
+	// 1. 解析评论ID
+	commentIDStr := c.Param("id")
+	commentID, err := strconv.ParseInt(commentIDStr, 10, 64)
+	if err != nil {
+		zap.L().Error("like comment with invalid id",
+			zap.String("comment_id", commentIDStr),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	// 2. 获取当前登录用户ID
+	userID, err := api.GetCurrentUserID(c)
+	if err != nil {
+		api.ResponseError(c, api.CodeNeedLogin)
+		return
+	}
+
+	// 3. 调用 service 层执行点赞逻辑
+	if err := service.LikeComment(c.Request.Context(), userID, commentID); err != nil {
+		if err == api.ErrorLikeRepeated {
+			api.ResponseErrorWithMsg(c, api.CodeInvalidParam, err.Error())
+			return
+		}
+		zap.L().Error("service.LikeComment() failed",
+			zap.Int64("commentID", commentID),
+			zap.Int64("userID", userID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	// 4. 点赞成功
+	api.ResponseSuccess(c, nil)
+}

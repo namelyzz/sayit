@@ -3,6 +3,7 @@ package mysql
 import (
 	"github.com/namelyzz/sayit/models"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // CreateComment 将评论记录插入 MySQL comment 表
@@ -126,4 +127,18 @@ func CountChildCommentsByParentIDs(parentIDs []int64) (map[int64]int64, error) {
 		countMap[r.ParentID] = r.Count
 	}
 	return countMap, nil
+}
+
+// IncrCommentLikeCount 评论点赞数 +1
+func IncrCommentLikeCount(commentID int64) error {
+	res := db.Model(&models.Comment{}).
+		Where("comment_id = ?", commentID).
+		Update("like_count", gorm.Expr("like_count + 1"))
+	if res.Error != nil {
+		zap.L().Error("incr comment like_count failed",
+			zap.Int64("comment_id", commentID),
+			zap.Error(res.Error))
+		return res.Error
+	}
+	return nil
 }
