@@ -20,6 +20,7 @@ var (
 	createCommentFunc             = mysql.CreateComment             // 创建评论
 	softDeleteCommentFunc         = mysql.SoftDeleteComment         // 软删除评论
 	incrCommentLikeCountFunc      = mysql.IncrCommentLikeCount      // 评论点赞数+1
+	decrCommentLikeCountFunc      = mysql.DecrCommentLikeCount      // 评论点赞数-1
 	getTopLevelCommentsFunc       = mysql.GetTopLevelComments       // 获取顶级评论
 	countTopLevelCommentsFunc     = mysql.CountTopLevelComments     // 统计顶级评论数量
 	getChildCommentsByParentFunc  = mysql.GetChildCommentsByParentIDs  // 获取子评论
@@ -342,6 +343,51 @@ func LikeComment(ctx context.Context, userID, commentID int64) error {
 		// 最后一次重试仍失败，记录日志但不返回错误
 		if i == likeRetryCount {
 			zap.L().Error("incr comment like_count failed after retry",
+				zap.Int64("comment_id", commentID),
+				zap.Int64("user_id", userID))
+		}
+	}
+
+	return nil
+}
+
+// UnlikeComment 取消点赞评论的业务逻辑
+// 幂等设计 + 乐观重试：
+// 1. 查询评论是否存在且未删除
+// 2. Redis SREM（幂等，未点赞返回 0）
+// 3. 如果 SREM 返回 0 → 未点赞，直接返回成功（幂等）
+// 4. 如果 SREM 返回 1 → 取消成功，MySQL DECR like_count（失败重试 1 次）
+func UnlikeComment(ctx context.Context, userID, commentID int64) error {
+	// 1. 查询评论是否存在
+	comment, err := getCommentByIDFunc(commentID)
+	if err != nil {
+		return err
+	}
+
+	// 2. 检查评论是否已删除
+	if comment.Status == 2 {
+		return api.ErrorInvalidParam
+	}
+
+	// 3. Redis SREM（幂等）
+	removed, err := commentUnlikeFunc(ctx, commentID, userID)
+	if err != nil {
+		return err
+	}
+
+	// 4. 如果返回 0，说明未点赞，幂等返回成功
+	if !removed {
+		return nil
+	}
+
+	// 5. MySQL DECR like_count（乐观重试）
+	for i := 0; i <= likeRetryCount; i++ {
+		if err := decrCommentLikeCountFunc(commentID); err == nil {
+			return nil
+		}
+		// 最后一次重试仍失败，记录日志但不返回错误
+		if i == likeRetryCount {
+			zap.L().Error("decr comment like_count failed after retry",
 				zap.Int64("comment_id", commentID),
 				zap.Int64("user_id", userID))
 		}

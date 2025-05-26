@@ -169,3 +169,39 @@ func LikeCommentHandler(c *gin.Context) {
 	// 4. 点赞成功
 	api.ResponseSuccess(c, nil)
 }
+
+// UnlikeCommentHandler 取消点赞评论接口
+// 路由: DELETE /api/v1/comment/:id/like (需要JWT认证)
+// 流程: 解析路径参数 -> 获取用户ID -> 调用 service.UnlikeComment -> 返回结果
+func UnlikeCommentHandler(c *gin.Context) {
+	// 1. 解析评论ID
+	commentIDStr := c.Param("id")
+	commentID, err := strconv.ParseInt(commentIDStr, 10, 64)
+	if err != nil {
+		zap.L().Error("unlike comment with invalid id",
+			zap.String("comment_id", commentIDStr),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	// 2. 获取当前登录用户ID
+	userID, err := api.GetCurrentUserID(c)
+	if err != nil {
+		api.ResponseError(c, api.CodeNeedLogin)
+		return
+	}
+
+	// 3. 调用 service 层执行取消点赞逻辑
+	if err := service.UnlikeComment(c.Request.Context(), userID, commentID); err != nil {
+		zap.L().Error("service.UnlikeComment() failed",
+			zap.Int64("commentID", commentID),
+			zap.Int64("userID", userID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	// 4. 取消点赞成功
+	api.ResponseSuccess(c, nil)
+}

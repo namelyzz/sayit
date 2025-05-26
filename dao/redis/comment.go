@@ -19,11 +19,14 @@ func CommentLikeComment(ctx context.Context, commentID, userID int64) (bool, err
 }
 
 // CommentUnlikeComment 取消评论点赞
-func CommentUnlikeComment(ctx context.Context, commentID, userID int64) error {
-	pipe := client.TxPipeline()
-	pipe.SRem(ctx, getRedisKey(KeyCommentLikedPF+strconv.FormatInt(commentID, 10)), userID)
-	_, err := pipe.Exec(ctx)
-	return err
+// 返回值: (removed, error) - removed=true 表示取消成功，removed=false 表示未点赞过
+func CommentUnlikeComment(ctx context.Context, commentID, userID int64) (bool, error) {
+	key := getRedisKey(KeyCommentLikedPF + strconv.FormatInt(commentID, 10))
+	removed, err := client.SRem(ctx, key, userID).Result()
+	if err != nil {
+		return false, err
+	}
+	return removed == 1, nil
 }
 
 // IsCommentLikedByUser 检查用户是否已点赞某评论

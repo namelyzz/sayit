@@ -142,3 +142,17 @@ func IncrCommentLikeCount(commentID int64) error {
 	}
 	return nil
 }
+
+// DecrCommentLikeCount 评论点赞数 -1（不会小于 0）
+func DecrCommentLikeCount(commentID int64) error {
+	res := db.Model(&models.Comment{}).
+		Where("comment_id = ? AND like_count > 0", commentID).
+		Update("like_count", gorm.Expr("like_count - 1"))
+	if res.Error != nil {
+		zap.L().Error("decr comment like_count failed",
+			zap.Int64("comment_id", commentID),
+			zap.Error(res.Error))
+		return res.Error
+	}
+	return nil
+}

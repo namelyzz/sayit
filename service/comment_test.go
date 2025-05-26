@@ -18,6 +18,7 @@ func restoreCommentTestHooks() func() {
 	origCreateComment := createCommentFunc
 	origSoftDeleteComment := softDeleteCommentFunc
 	origIncrCommentLikeCount := incrCommentLikeCountFunc
+	origDecrCommentLikeCount := decrCommentLikeCountFunc
 	origGetTopLevelComments := getTopLevelCommentsFunc
 	origCountTopLevelComments := countTopLevelCommentsFunc
 	origGetChildCommentsByParent := getChildCommentsByParentFunc
@@ -33,6 +34,7 @@ func restoreCommentTestHooks() func() {
 		createCommentFunc = origCreateComment
 		softDeleteCommentFunc = origSoftDeleteComment
 		incrCommentLikeCountFunc = origIncrCommentLikeCount
+		decrCommentLikeCountFunc = origDecrCommentLikeCount
 		getTopLevelCommentsFunc = origGetTopLevelComments
 		countTopLevelCommentsFunc = origCountTopLevelComments
 		getChildCommentsByParentFunc = origGetChildCommentsByParent
@@ -755,6 +757,166 @@ func TestLikeComment_MySQLFailsFirstThenRetrySucceeds(t *testing.T) {
 	}
 
 	err := LikeComment(context.Background(), 42, 1001)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, callCount) // 调用了 2 次
+}
+
+// ========== UnlikeComment 测试 ==========
+
+func TestUnlikeComment_Success(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	commentUnlikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) {
+		assert.Equal(t, int64(1001), commentID)
+		assert.Equal(t, int64(42), userID)
+		return true, nil // 取消成功
+	}
+	var decrCalled bool
+	decrCommentLikeCountFunc = func(commentID int64) error {
+		decrCalled = true
+		assert.Equal(t, int64(1001), commentID)
+		return nil
+	}
+
+	err := UnlikeComment(context.Background(), 42, 1001)
+
+	require.NoError(t, err)
+	assert.True(t, decrCalled)
+}
+
+func TestUnlikeComment_CommentNotFound(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return nil, errors.New("record not found")
+	}
+
+	err := UnlikeComment(context.Background(), 42, 1001)
+
+	require.Error(t, err)
+	assert.Equal(t, "record not found", err.Error())
+}
+
+func TestUnlikeComment_CommentDeleted(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    2, // 已删除
+		}, nil
+	}
+
+	err := UnlikeComment(context.Background(), 42, 1001)
+
+	require.Error(t, err)
+	assert.Equal(t, "无效的参数", err.Error())
+}
+
+func TestUnlikeComment_NotLiked_Idempotent(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	commentUnlikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) {
+		return false, nil // 未点赞过
+	}
+	decrCommentLikeCountFunc = func(commentID int64) error {
+		t.Fatal("should not call decr for not liked comment")
+		return nil
+	}
+
+	err := UnlikeComment(context.Background(), 42, 1001)
+
+	require.NoError(t, err) // 幂等返回成功
+}
+
+func TestUnlikeComment_RedisFails(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	commentUnlikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) {
+		return false, errors.New("redis error")
+	}
+
+	err := UnlikeComment(context.Background(), 42, 1001)
+
+	require.Error(t, err)
+	assert.Equal(t, "redis error", err.Error())
+}
+
+func TestUnlikeComment_MySQLFailsButNoError(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	commentUnlikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) {
+		return true, nil // 取消成功
+	}
+	decrCommentLikeCountFunc = func(commentID int64) error {
+		return errors.New("db error") // MySQL 失败
+	}
+
+	// 即使 MySQL 失败，取消点赞仍然成功（Redis 已记录）
+	err := UnlikeComment(context.Background(), 42, 1001)
+
+	require.NoError(t, err)
+}
+
+func TestUnlikeComment_MySQLFailsFirstThenRetrySucceeds(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 1001,
+			PostID:    100,
+			AuthorID:  42,
+			Status:    1,
+		}, nil
+	}
+	commentUnlikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) {
+		return true, nil
+	}
+	callCount := 0
+	decrCommentLikeCountFunc = func(commentID int64) error {
+		callCount++
+		if callCount == 1 {
+			return errors.New("db error") // 第一次失败
+		}
+		return nil // 重试成功
+	}
+
+	err := UnlikeComment(context.Background(), 42, 1001)
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, callCount) // 调用了 2 次
