@@ -156,3 +156,20 @@ func DecrCommentLikeCount(commentID int64) error {
 	}
 	return nil
 }
+
+// GetCommentLikeScoreByAuthor 获取用户所有正常评论的点赞总分
+// 用于计算用户热度值中的评论贡献部分
+func GetCommentLikeScoreByAuthor(authorID int64) (int64, error) {
+	var total int64
+	res := db.Model(&models.Comment{}).
+		Where("author_id = ? AND status = 1", authorID).
+		Select("COALESCE(SUM(like_count), 0)").
+		Scan(&total)
+	if res.Error != nil {
+		zap.L().Error("get comment like score by author failed",
+			zap.Int64("author_id", authorID),
+			zap.Error(res.Error))
+		return 0, res.Error
+	}
+	return total, nil
+}

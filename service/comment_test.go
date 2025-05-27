@@ -23,6 +23,7 @@ func restoreCommentTestHooks() func() {
 	origCountTopLevelComments := countTopLevelCommentsFunc
 	origGetChildCommentsByParent := getChildCommentsByParentFunc
 	origCountChildCommentsByParent := countChildCommentsByParentFunc
+	origGetCommentLikeScore := getCommentLikeScoreFunc
 	origCommentLike := commentLikeFunc
 	origCommentUnlike := commentUnlikeFunc
 	origIsCommentLiked := isCommentLikedFunc
@@ -39,6 +40,7 @@ func restoreCommentTestHooks() func() {
 		countTopLevelCommentsFunc = origCountTopLevelComments
 		getChildCommentsByParentFunc = origGetChildCommentsByParent
 		countChildCommentsByParentFunc = origCountChildCommentsByParent
+		getCommentLikeScoreFunc = origGetCommentLikeScore
 		commentLikeFunc = origCommentLike
 		commentUnlikeFunc = origCommentUnlike
 		isCommentLikedFunc = origIsCommentLiked
@@ -920,4 +922,59 @@ func TestUnlikeComment_MySQLFailsFirstThenRetrySucceeds(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, callCount) // 调用了 2 次
+}
+
+// ========== GetUserCommentScore 测试 ==========
+
+func TestGetUserCommentScore_WithLikes(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentLikeScoreFunc = func(authorID int64) (int64, error) {
+		assert.Equal(t, int64(42), authorID)
+		return 10, nil // 10 个点赞
+	}
+
+	score, err := GetUserCommentScore(42)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(500), score) // 10 × 50 = 500
+}
+
+func TestGetUserCommentScore_NoComments(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentLikeScoreFunc = func(authorID int64) (int64, error) {
+		return 0, nil // 无评论
+	}
+
+	score, err := GetUserCommentScore(42)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), score)
+}
+
+func TestGetUserCommentScore_NoLikes(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentLikeScoreFunc = func(authorID int64) (int64, error) {
+		return 0, nil // 有评论但无点赞
+	}
+
+	score, err := GetUserCommentScore(42)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), score)
+}
+
+func TestGetUserCommentScore_QueryFails(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentLikeScoreFunc = func(authorID int64) (int64, error) {
+		return 0, errors.New("db error")
+	}
+
+	_, err := GetUserCommentScore(42)
+
+	require.Error(t, err)
+	assert.Equal(t, "db error", err.Error())
 }

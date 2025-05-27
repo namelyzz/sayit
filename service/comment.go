@@ -12,6 +12,7 @@ import (
 
 const maxCommentDepth = 10 // 最大嵌套深度
 const deletedContent = "[已删除]" // 已删除评论的占位内容
+const commentLikeScoreMultiplier = 50 // 每个评论点赞的热度分值
 
 // 以下变量可被测试替换（mock），方便单元测试
 var (
@@ -25,6 +26,7 @@ var (
 	countTopLevelCommentsFunc     = mysql.CountTopLevelComments     // 统计顶级评论数量
 	getChildCommentsByParentFunc  = mysql.GetChildCommentsByParentIDs  // 获取子评论
 	countChildCommentsByParentFunc = mysql.CountChildCommentsByParentIDs // 统计子评论数量
+	getCommentLikeScoreFunc       = mysql.GetCommentLikeScoreByAuthor  // 获取用户评论点赞总分
 
 	commentLikeFunc   = redis.CommentLikeComment   // Redis 点赞
 	commentUnlikeFunc = redis.CommentUnlikeComment  // Redis 取消点赞
@@ -394,4 +396,15 @@ func UnlikeComment(ctx context.Context, userID, commentID int64) error {
 	}
 
 	return nil
+}
+
+// GetUserCommentScore 获取用户评论点赞的热度分数
+// 计算方式: like_count 总和 × 固定倍率(50)
+// 用于后续热度接口计算用户总热度
+func GetUserCommentScore(userID int64) (int64, error) {
+	likeCount, err := getCommentLikeScoreFunc(userID)
+	if err != nil {
+		return 0, err
+	}
+	return likeCount * commentLikeScoreMultiplier, nil
 }
