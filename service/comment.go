@@ -10,11 +10,16 @@ import (
 	"strconv"
 )
 
-const maxCommentDepth = 10 // 最大嵌套深度
-const deletedContent = "[已删除]" // 已删除评论的占位内容
-const commentLikeScoreMultiplier = 50 // 每个评论点赞的热度分值
+// 常量定义
+const (
+	maxCommentDepth           = 10  // 最大嵌套深度，超过此深度不再返回子评论
+	deletedContent            = "[已删除]" // 已删除评论的占位内容
+	commentLikeScoreMultiplier = 50 // 每个评论点赞的热度分值（帖子投票 432 分/票，评论点赞 50 分/赞，比例约 8.6:1）
+	likeRetryCount            = 1  // MySQL 操作失败时的重试次数
+)
 
-// 以下变量可被测试替换（mock），方便单元测试
+// mock 变量定义，方便单元测试替换（mock）依赖的函数
+// 使用模式: 测试时替换这些变量，验证业务逻辑正确性，无需真实数据库/Redis
 var (
 	getPostByIDFunc               = mysql.GetPostByID               // 查询帖子
 	getCommentByIDFunc            = mysql.GetCommentByID            // 查询评论
@@ -34,9 +39,16 @@ var (
 )
 
 // CreateComment 创建评论的业务逻辑
-// 1. 验证帖子是否存在
-// 2. 如果是回复评论，验证父评论是否存在且属于同一帖子
-// 3. 生成评论ID并入库
+//
+// 业务规则:
+//  1. 帖子必须存在且未删除
+//  2. 如果是回复评论，父评论必须存在且属于同一帖子
+//  3. 根评论ID(root_id)计算规则:
+//     - 顶级评论: root_id = 0
+//     - 回复顶级评论: root_id = 父评论ID
+//     - 回复嵌套评论: root_id = 继承父评论的 root_id
+//
+// 返回: 创建成功的评论对象（含雪花ID、创建时间等）
 func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComment) (*models.Comment, error) {
 	// 1. 解析帖子ID
 	postID, err := strconv.ParseInt(p.PostID, 10, 64)
@@ -113,9 +125,18 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 }
 
 // GetCommentTree 获取帖子的评论树
-// 1. 分页获取顶级评论
-// 2. 递归获取子评论，构建树形结构
-// 3. 回填点赞状态
+//
+// 数据获取流程:
+//  1. 分页获取顶级评论（parent_id=0，按时间倒序）
+//  2. 统计顶级评论总数（用于分页）
+//  3. 递归获取子评论，构建树形结构（最多 10 层）
+//  4. 处理已删除评论（content 替换为 [已删除]）
+//  5. 回填当前用户的点赞状态（仅登录用户）
+//
+// 性能优化:
+//   - 批量获取子评论，避免 N+1 查询
+//   - 批量统计子评论数量，使用 GROUP BY
+//   - 批量查询点赞状态，使用 Pipeline
 func GetCommentTree(ctx context.Context, postID int64, p *models.ParamCommentList, currentUserID int64) (*models.CommentListResponse, error) {
 	// 1. 获取顶级评论
 	topComments, err := getTopLevelCommentsFunc(postID, p.Page, p.Size)
@@ -157,7 +178,17 @@ func GetCommentTree(ctx context.Context, postID int64, p *models.ParamCommentLis
 }
 
 // fillChildren 递归填充子评论
-// depth: 当前深度（从1开始）
+//
+// 算法:
+//  1. 收集当前层所有父评论ID
+//  2. 批量获取这些父评论的子评论（一次 SQL 查询）
+//  3. 批量统计子评论数量（一次 SQL 查询）
+//  4. 按 parent_id 分组，填充到对应的父评论
+//  5. 递归处理下一层（depth+1）
+//
+// 终止条件:
+//   - depth >= maxCommentDepth (10): 超过最大深度
+//   - parents 为空: 无更多子评论
 func fillChildren(parents []*models.CommentDetail, depth int) error {
 	if depth >= maxCommentDepth || len(parents) == 0 {
 		return nil
@@ -219,6 +250,12 @@ func fillChildren(parents []*models.CommentDetail, depth int) error {
 }
 
 // fillCommentLiked 批量回填评论点赞状态（仅登录用户）
+//
+// 流程:
+//  1. 未登录用户（userID=0）直接返回，不查询 Redis
+//  2. 递归收集所有评论ID（包括子评论）
+//  3. 使用 Pipeline 批量查询 Redis SISMEMBER
+//  4. 递归设置每条评论的 IsLiked 字段
 func fillCommentLiked(ctx context.Context, details []*models.CommentDetail, currentUserID int64) {
 	if currentUserID == 0 {
 		return
@@ -259,8 +296,16 @@ func setCommentLiked(details []*models.CommentDetail, likedMap map[int64]bool) {
 }
 
 // DeleteComment 删除评论的业务逻辑
-// 权限：帖子作者可删除任意评论，评论作者可删除自己的评论
-// 策略：软删除（status=2），保留子评论结构
+//
+// 权限规则:
+//   - 帖子作者: 可删除该帖子下的任意评论
+//   - 评论作者: 只能删除自己的评论
+//   - 其他用户: 无权删除
+//
+// 策略:
+//   - 软删除: status 设为 2，不物理删除
+//   - 子评论: 保持不变，继续正常展示
+//   - 幂等: 已删除的评论再次删除返回成功
 func DeleteComment(ctx context.Context, userID, commentID int64) error {
 	// 1. 查询评论是否存在
 	comment, err := getCommentByIDFunc(commentID)
@@ -305,15 +350,17 @@ func markDeletedContent(details []*models.CommentDetail) {
 	}
 }
 
-// const for like retry
-const likeRetryCount = 1
-
 // LikeComment 点赞评论的业务逻辑
-// 幂等设计 + 乐观重试：
-// 1. 查询评论是否存在且未删除
-// 2. Redis SADD（幂等，已存在返回 0）
-// 3. 如果 SADD 返回 0 → 已点赞，返回重复错误
-// 4. 如果 SADD 返回 1 → 新点赞，MySQL INCR like_count（失败重试 1 次）
+//
+// 一致性策略: 幂等设计 + 乐观重试
+//  - Redis 先操作: SADD 记录点赞状态（幂等，已存在返回 0）
+//  - MySQL 后操作: INCR like_count（失败重试 1 次）
+//  - 容错: MySQL 失败时只记日志，不返回错误（Redis 已记录，可后续补偿）
+//
+// 返回错误:
+//   - ErrorLikeRepeated: 已点赞过
+//   - ErrorInvalidParam: 评论已删除
+//   - 其他: 评论不存在、Redis 失败等
 func LikeComment(ctx context.Context, userID, commentID int64) error {
 	// 1. 查询评论是否存在
 	comment, err := getCommentByIDFunc(commentID)
@@ -354,11 +401,15 @@ func LikeComment(ctx context.Context, userID, commentID int64) error {
 }
 
 // UnlikeComment 取消点赞评论的业务逻辑
-// 幂等设计 + 乐观重试：
-// 1. 查询评论是否存在且未删除
-// 2. Redis SREM（幂等，未点赞返回 0）
-// 3. 如果 SREM 返回 0 → 未点赞，直接返回成功（幂等）
-// 4. 如果 SREM 返回 1 → 取消成功，MySQL DECR like_count（失败重试 1 次）
+//
+// 一致性策略: 幂等设计 + 乐观重试
+//  - Redis 先操作: SREM 移除点赞状态（幂等，未点赞返回 0）
+//  - MySQL 后操作: DECR like_count（失败重试 1 次）
+//  - 容错: MySQL 失败时只记日志，不返回错误（Redis 已移除，可后续补偿）
+//
+// 幂等设计:
+//   - 未点赞时调用取消点赞，直接返回成功（不报错）
+//   - 前端无需区分"取消成功"和"未点赞"两种状态
 func UnlikeComment(ctx context.Context, userID, commentID int64) error {
 	// 1. 查询评论是否存在
 	comment, err := getCommentByIDFunc(commentID)
@@ -399,8 +450,14 @@ func UnlikeComment(ctx context.Context, userID, commentID int64) error {
 }
 
 // GetUserCommentScore 获取用户评论点赞的热度分数
-// 计算方式: like_count 总和 × 固定倍率(50)
-// 用于后续热度接口计算用户总热度
+//
+// 计算公式: 用户所有正常评论的 like_count 总和 × 50
+// 与帖子投票分值对比:
+//   - 帖子投票: 1 票 = 432 分
+//   - 评论点赞: 1 赞 = 50 分
+//   - 比例约 8.6:1
+//
+// 使用场景: 后续热度接口调用此函数，与帖子投票分合并计算用户总热度
 func GetUserCommentScore(userID int64) (int64, error) {
 	likeCount, err := getCommentLikeScoreFunc(userID)
 	if err != nil {

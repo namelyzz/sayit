@@ -7,6 +7,8 @@ import (
 )
 
 // CreateComment 将评论记录插入 MySQL comment 表
+// 使用 Omit("UpdateTime") 排除 UpdateTime 字段，让数据库使用默认值
+// 入库前需确保: PostID、AuthorID、Content 已设置，Status 默认为 1
 func CreateComment(c *models.Comment) (err error) {
 	res := db.Omit("UpdateTime").Create(c)
 	if res.Error != nil {
@@ -31,12 +33,16 @@ func GetCommentByID(commentID int64) (comment *models.Comment, err error) {
 }
 
 // CommentWithAuthor 包含作者用户名的评论
+// 用于评论列表查询，通过 JOIN users 表获取作者名
+// 避免 N+1 问题，在 SQL 层面一次性获取
 type CommentWithAuthor struct {
 	models.Comment
 	AuthorName string `json:"author_name" gorm:"column:author_name"`
 }
 
 // GetTopLevelComments 获取帖子的顶级评论（parent_id=0），按创建时间倒序，分页
+// 使用场景: 评论树的第一层，按时间倒序展示最新评论
+// SQL: SELECT c.*, u.username FROM comment c JOIN users u ON ... WHERE parent_id=0 ORDER BY create_time DESC
 func GetTopLevelComments(postID int64, page, size int) ([]*CommentWithAuthor, error) {
 	var comments []*CommentWithAuthor
 	offset := (page - 1) * size
@@ -57,6 +63,7 @@ func GetTopLevelComments(postID int64, page, size int) ([]*CommentWithAuthor, er
 }
 
 // CountTopLevelComments 统计帖子的顶级评论数量
+// 用于分页计算，返回该帖子下 parent_id=0 的评论总数
 func CountTopLevelComments(postID int64) (int64, error) {
 	var count int64
 	res := db.Model(&models.Comment{}).
@@ -69,6 +76,9 @@ func CountTopLevelComments(postID int64) (int64, error) {
 }
 
 // GetChildCommentsByParentIDs 批量获取指定父评论ID列表的子评论，按创建时间正序
+// 使用场景: 递归构建评论树时，批量获取某一层的所有子评论
+// 按创建时间正序（ASC）展示，最早的回复在前
+// 注意: 空 parentIDs 时直接返回空切片，避免无意义的 SQL 查询
 func GetChildCommentsByParentIDs(parentIDs []int64) ([]*CommentWithAuthor, error) {
 	if len(parentIDs) == 0 {
 		return []*CommentWithAuthor{}, nil
@@ -90,6 +100,8 @@ func GetChildCommentsByParentIDs(parentIDs []int64) ([]*CommentWithAuthor, error
 }
 
 // SoftDeleteComment 软删除评论，将 status 设为 2
+// 幂等设计: 评论不存在或已删除时不返回错误，前端可重复调用
+// 子评论保持不变，仅标记当前评论为已删除
 func SoftDeleteComment(commentID int64) error {
 	res := db.Model(&models.Comment{}).
 		Where("comment_id = ? AND status = 1", commentID).
@@ -105,6 +117,10 @@ func SoftDeleteComment(commentID int64) error {
 	}
 	return nil
 }
+// CountChildCommentsByParentIDs 批量统计指定父评论的子评论数量
+// 使用场景: 评论树中显示每条评论的子评论总数（ChildCount 字段）
+// 使用 GROUP BY parent_id 一次性查询，避免 N+1 问题
+// 返回 map[parent_id]count，方便按 parent_id 查找
 func CountChildCommentsByParentIDs(parentIDs []int64) (map[int64]int64, error) {
 	if len(parentIDs) == 0 {
 		return map[int64]int64{}, nil
@@ -130,6 +146,9 @@ func CountChildCommentsByParentIDs(parentIDs []int64) (map[int64]int64, error) {
 }
 
 // IncrCommentLikeCount 评论点赞数 +1
+// 调用时机: Redis SADD 成功后（确认是新点赞）
+// 使用 gorm.Expr 确保原子性操作，避免并发问题
+// 失败时由 service 层重试（乐观重试策略）
 func IncrCommentLikeCount(commentID int64) error {
 	res := db.Model(&models.Comment{}).
 		Where("comment_id = ?", commentID).
@@ -144,6 +163,9 @@ func IncrCommentLikeCount(commentID int64) error {
 }
 
 // DecrCommentLikeCount 评论点赞数 -1（不会小于 0）
+// 调用时机: Redis SREM 成功后（确认取消了点赞）
+// WHERE 条件包含 like_count > 0，防止减成负数
+// 失败时由 service 层重试（乐观重试策略）
 func DecrCommentLikeCount(commentID int64) error {
 	res := db.Model(&models.Comment{}).
 		Where("comment_id = ? AND like_count > 0", commentID).
@@ -158,7 +180,9 @@ func DecrCommentLikeCount(commentID int64) error {
 }
 
 // GetCommentLikeScoreByAuthor 获取用户所有正常评论的点赞总分
-// 用于计算用户热度值中的评论贡献部分
+// 使用场景: 计算用户热度值中的评论贡献部分
+// 只统计 status=1（正常）的评论，已删除评论不计入
+// 使用 COALESCE 处理用户无评论的情况，返回 0 而非 NULL
 func GetCommentLikeScoreByAuthor(authorID int64) (int64, error) {
 	var total int64
 	res := db.Model(&models.Comment{}).

@@ -10,9 +10,16 @@ import (
 )
 
 // CreateCommentHandler 创建评论接口
+//
 // 路由: POST /api/v1/comment (需要JWT认证)
 // 请求体: JSON { "post_id": "123", "parent_id": "0", "content": "评论内容" }
-// 流程: 参数绑定 -> 从JWT上下文获取用户ID -> 调用 service.CreateComment -> 返回结果
+//
+// 参数说明:
+//   - post_id: 帖子ID（必填）
+//   - parent_id: 父评论ID（可选，不传或为 0 表示顶级评论）
+//   - content: 评论内容（必填，最长 1024 字符）
+//
+// 返回: 创建成功的评论对象（含 comment_id、create_time 等）
 func CreateCommentHandler(c *gin.Context) {
 	// 1. 使用请求上下文，支持超时和取消
 	ctx := c.Request.Context()
@@ -48,9 +55,17 @@ func CreateCommentHandler(c *gin.Context) {
 }
 
 // GetCommentListHandler 获取帖子评论列表接口
+//
 // 路由: GET /api/v1/post/:id/comments (公开接口，可选JWT)
 // 查询参数: page, size
-// 流程: 解析路径参数 -> 绑定查询参数 -> 调用 service.GetCommentTree -> 返回评论树
+//
+// 返回结构: 评论树，每条评论包含:
+//   - 评论基本信息（content、author_name、create_time 等）
+//   - 子评论列表（children，递归嵌套，最多 10 层）
+//   - 子评论总数（child_count）
+//   - 当前用户点赞状态（is_liked，未登录为 false）
+//
+// 已删除评论: content 显示为 [已删除]，子评论保持不变
 func GetCommentListHandler(c *gin.Context) {
 	// 1. 解析帖子ID
 	postIDStr := c.Param("id")
@@ -90,9 +105,16 @@ func GetCommentListHandler(c *gin.Context) {
 }
 
 // DeleteCommentHandler 删除评论接口
+//
 // 路由: DELETE /api/v1/comment/:id (需要JWT认证)
-// 权限: 帖子作者或评论作者可删除
-// 流程: 解析路径参数 -> 获取用户ID -> 调用 service.DeleteComment -> 返回结果
+// 路径参数: id - 评论ID
+//
+// 权限规则:
+//   - 帖子作者: 可删除该帖子下的任意评论
+//   - 评论作者: 只能删除自己的评论
+//
+// 删除策略: 软删除（status=2），子评论保持不变
+// 幂等设计: 已删除的评论再次删除返回成功
 func DeleteCommentHandler(c *gin.Context) {
 	// 1. 解析评论ID
 	commentIDStr := c.Param("id")
@@ -131,8 +153,15 @@ func DeleteCommentHandler(c *gin.Context) {
 }
 
 // LikeCommentHandler 点赞评论接口
+//
 // 路由: POST /api/v1/comment/:id/like (需要JWT认证)
-// 流程: 解析路径参数 -> 获取用户ID -> 调用 service.LikeComment -> 返回结果
+// 路径参数: id - 评论ID
+//
+// 业务规则:
+//   - 不能重复点赞（返回 "重复的点赞"）
+//   - 不能点赞已删除的评论
+//
+// 一致性: Redis SADD + MySQL INCR（乐观重试，MySQL 失败不返回错误）
 func LikeCommentHandler(c *gin.Context) {
 	// 1. 解析评论ID
 	commentIDStr := c.Param("id")
@@ -171,8 +200,15 @@ func LikeCommentHandler(c *gin.Context) {
 }
 
 // UnlikeCommentHandler 取消点赞评论接口
+//
 // 路由: DELETE /api/v1/comment/:id/like (需要JWT认证)
-// 流程: 解析路径参数 -> 获取用户ID -> 调用 service.UnlikeComment -> 返回结果
+// 路径参数: id - 评论ID
+//
+// 业务规则:
+//   - 幂等设计: 未点赞时调用取消点赞，直接返回成功（不报错）
+//   - 不能取消点赞已删除的评论
+//
+// 一致性: Redis SREM + MySQL DECR（乐观重试，MySQL 失败不返回错误）
 func UnlikeCommentHandler(c *gin.Context) {
 	// 1. 解析评论ID
 	commentIDStr := c.Param("id")
