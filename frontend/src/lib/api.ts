@@ -18,6 +18,7 @@ export interface UserProfile {
   create_time: string;
   post_count: number;
   post_score: number;
+  comment_score: number;
   follower_count: number;
   following_count: number;
   is_following: boolean;
@@ -91,6 +92,27 @@ export interface PostDetail {
   vote_count: number;
   comment_count: number;
   current_user_vote: number;
+}
+
+export interface CommentDetail {
+  comment_id: string;
+  post_id: string;
+  author_id: string;
+  author_name: string;
+  parent_id: string;
+  root_id: string;
+  content: string;
+  like_count: number;
+  status: number;
+  create_time: string;
+  children?: CommentDetail[];
+  child_count: number;
+  is_liked: boolean;
+}
+
+export interface CommentListResponse {
+  list: CommentDetail[];
+  total: number;
 }
 
 class ApiClient {
@@ -322,6 +344,45 @@ class ApiClient {
         post_id: postId,
         direction: direction.toString(),
       }),
+    });
+  }
+
+  // ========== 评论相关 API ==========
+
+  async getCommentList(postId: string, page?: number, size?: number) {
+    const searchParams = new URLSearchParams();
+    if (page) searchParams.set("page", page.toString());
+    if (size) searchParams.set("size", size.toString());
+    const query = searchParams.toString();
+    return this.request<CommentListResponse>(`/post/${postId}/comments${query ? `?${query}` : ""}`);
+  }
+
+  async createComment(postId: string, content: string, parentId?: string) {
+    return this.request<CommentDetail>("/comment", {
+      method: "POST",
+      body: JSON.stringify({
+        post_id: postId,
+        content,
+        parent_id: parentId || "0",
+      }),
+    });
+  }
+
+  async deleteComment(commentId: string) {
+    return this.request(`/comment/${commentId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async likeComment(commentId: string) {
+    return this.request(`/comment/${commentId}/like`, {
+      method: "POST",
+    });
+  }
+
+  async unlikeComment(commentId: string) {
+    return this.request(`/comment/${commentId}/like`, {
+      method: "DELETE",
     });
   }
 }

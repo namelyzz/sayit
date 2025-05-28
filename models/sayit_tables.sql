@@ -84,3 +84,33 @@ CREATE TABLE `outbox_events` (
                                  KEY `idx_event_type` (`event_type`),
                                  KEY `idx_aggregate_id` (`aggregate_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `comment`;
+CREATE TABLE `comment` (
+                           `id` bigint(20) NOT NULL AUTO_INCREMENT,
+                           `comment_id` bigint(20) NOT NULL COMMENT 'comment id (snowflake)',
+                           `post_id` bigint(20) NOT NULL COMMENT 'post id',
+                           `author_id` bigint(20) NOT NULL COMMENT 'author user id',
+                           `parent_id` bigint(20) NOT NULL DEFAULT 0 COMMENT 'parent comment id (0=top level)',
+                           `root_id` bigint(20) NOT NULL DEFAULT 0 COMMENT 'root comment id (0=self is root)',
+                           `content` varchar(1024) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'content',
+                           `like_count` bigint(20) NOT NULL DEFAULT 0 COMMENT 'like count (denormalized)',
+                           `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT 'status: 1=normal, 2=deleted',
+                           `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+                           `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                           PRIMARY KEY (`id`),
+                           UNIQUE KEY `idx_comment_id` (`comment_id`),
+                           KEY `idx_post_id` (`post_id`),
+                           KEY `idx_parent_id` (`parent_id`),
+                           KEY `idx_root_id` (`root_id`),
+                           KEY `idx_author_id` (`author_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `comment_like`;
+CREATE TABLE `comment_like` (
+                                `comment_id` bigint(20) NOT NULL COMMENT 'comment id',
+                                `user_id` bigint(20) NOT NULL COMMENT 'user id',
+                                `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+                                PRIMARY KEY (`comment_id`, `user_id`),
+                                KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

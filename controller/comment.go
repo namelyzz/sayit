@@ -45,8 +45,11 @@ func CreateCommentHandler(c *gin.Context) {
 		zap.L().Error("service.CreateComment() failed",
 			zap.Error(err),
 			zap.Int64("userID", userID),
+			zap.String("postID", p.PostID),
+			zap.String("content", p.Content),
 		)
-		api.ResponseError(c, api.CodeServerBusy)
+		// 返回更具体的错误信息，方便调试
+		api.ResponseErrorWithMsg(c, api.CodeServerBusy, err.Error())
 		return
 	}
 

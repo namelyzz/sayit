@@ -437,9 +437,9 @@ export default function RightSidebar() {
                         </span>
                         <span className="group/heat relative inline-flex items-center gap-1 rounded-md bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-600">
                           <Flame className="h-3.5 w-3.5" />
-                          <span>{formatCount(profile?.post_score ?? 0)}</span>
+                          <span>{formatCount((profile?.post_score ?? 0) + (profile?.comment_score ?? 0))}</span>
                           <span className="pointer-events-none absolute right-0 top-full z-10 mt-2 w-64 rounded-xl border border-border bg-white px-3 py-2 text-xs font-normal leading-5 text-muted-strong opacity-0 shadow-[0_16px_34px_rgba(15,23,42,0.12)] transition group-hover/heat:translate-y-1 group-hover/heat:opacity-100">
-                            这是用户所有帖子的投票得分。
+                            这是用户所有帖子的投票得分与评论点赞得分之和。
                           </span>
                         </span>
                       </div>

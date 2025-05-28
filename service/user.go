@@ -72,6 +72,10 @@ func GetUserProfile(ctx context.Context, currentUserID, targetUserID int64) (pro
 	if err != nil {
 		return nil, err
 	}
+	commentScore, err := GetUserCommentScore(targetUserID)
+	if err != nil {
+		return nil, err
+	}
 	followerCount, err := mysql.CountFollowers(targetUserID)
 	if err != nil {
 		return nil, err
@@ -100,6 +104,7 @@ func GetUserProfile(ctx context.Context, currentUserID, targetUserID int64) (pro
 		CreateTime:     user.CreateTime,
 		PostCount:      postCount,
 		PostScore:      postScore,
+		CommentScore:   commentScore,
 		FollowerCount:  followerCount,
 		FollowingCount: followingCount,
 		IsFollowing:    isFollowing,

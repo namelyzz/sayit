@@ -4,20 +4,21 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowDown, ArrowLeft, ArrowUp, MessageSquare, Share2 } from "lucide-react";
-import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import PageShell from "@/components/ui/PageShell";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { Textarea } from "@/components/ui/Field";
+import CommentList from "@/components/ui/CommentList";
 import { apiClient, type PostDetail } from "@/lib/api";
 import { formatCount, formatDateTime } from "@/lib/format";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 const SCORE_PER_VOTE = 432;
 
 export default function PostDetailPage() {
   const params = useParams();
   const postId = params.id as string;
+  const { user } = useAuth();
 
   const [post, setPost] = useState<PostDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -186,16 +187,11 @@ export default function PostDetailPage() {
       <section className="rounded-lg border border-border bg-surface p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-foreground">评论</h2>
         <div className="mt-4">
-          <Textarea rows={3} placeholder="写下你的评论..." />
-          <div className="mt-3 flex justify-end">
-            <Button>
-              <MessageSquare className="h-4 w-4" />
-              发表评论
-            </Button>
-          </div>
-        </div>
-        <div className="mt-6 rounded-lg bg-surface-soft px-4 py-8 text-center text-sm text-muted">
-          暂无评论。等第一条有分量的回复。
+          <CommentList
+            postId={postId}
+            currentUserId={user?.user_id}
+            postAuthorId={post.author_id}
+          />
         </div>
       </section>
     </PageShell>

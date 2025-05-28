@@ -27,6 +27,7 @@ type UserProfile struct {
 	CreateTime     time.Time   `json:"create_time"`
 	PostCount      int64       `json:"post_count"`
 	PostScore      int64       `json:"post_score"`
+	CommentScore   int64       `json:"comment_score"`
 	FollowerCount  int64       `json:"follower_count"`
 	FollowingCount int64       `json:"following_count"`
 	IsFollowing    bool        `json:"is_following"`

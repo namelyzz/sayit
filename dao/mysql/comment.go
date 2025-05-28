@@ -197,3 +197,49 @@ func GetCommentLikeScoreByAuthor(authorID int64) (int64, error) {
 	}
 	return total, nil
 }
+
+// CountCommentsByPostID 统计帖子的评论数量（包含所有层级，只统计正常状态）
+// 使用场景: 帖子详情和帖子列表中显示评论总数
+func CountCommentsByPostID(postID int64) (int64, error) {
+	var count int64
+	res := db.Model(&models.Comment{}).
+		Where("post_id = ? AND status = 1", postID).
+		Count(&count)
+	if res.Error != nil {
+		zap.L().Error("count comments by post id failed",
+			zap.Int64("post_id", postID),
+			zap.Error(res.Error))
+		return 0, res.Error
+	}
+	return count, nil
+}
+
+// CountCommentsByPostIDs 批量统计多个帖子的评论数量
+// 使用场景: 帖子列表中批量获取评论数，避免 N+1 查询
+// 返回 map[post_id]count
+func CountCommentsByPostIDs(postIDs []int64) (map[int64]int64, error) {
+	if len(postIDs) == 0 {
+		return map[int64]int64{}, nil
+	}
+	type result struct {
+		PostID int64 `gorm:"column:post_id"`
+		Count  int64 `gorm:"column:cnt"`
+	}
+	var results []result
+	res := db.Model(&models.Comment{}).
+		Select("post_id, COUNT(*) AS cnt").
+		Where("post_id IN ? AND status = 1", postIDs).
+		Group("post_id").
+		Scan(&results)
+	if res.Error != nil {
+		zap.L().Error("count comments by post ids failed",
+			zap.Int("post_count", len(postIDs)),
+			zap.Error(res.Error))
+		return nil, res.Error
+	}
+	countMap := make(map[int64]int64, len(results))
+	for _, r := range results {
+		countMap[r.PostID] = r.Count
+	}
+	return countMap, nil
+}

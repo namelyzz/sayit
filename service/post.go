@@ -100,10 +100,14 @@ func GetPostDetailByID(ctx context.Context, postID int64, currentUserID int64) (
 		currentUserVote = int8(redis.GetPostVoteScore(ctx, postIDStr, strconv.FormatInt(currentUserID, 10)))
 	}
 
+	// 5. 获取评论数量
+	commentCount, _ := mysql.CountCommentsByPostID(postID)
+
 	return &models.PostDetail{
 		AuthorName:      user.Username,
 		LikeCount:       redis.GetPostVoteValue(ctx, postIDStr),
 		VoteCount:       redis.GetPostVoteCount(ctx, postIDStr),
+		CommentCount:    commentCount,
 		CurrentUserVote: currentUserVote,
 		Post:            post,
 		CommunityDetail: detail,
@@ -126,15 +130,27 @@ func GetPostListWithViewer(ctx context.Context, p *models.ParamPostList, current
 }
 
 func enrichPostVoteState(ctx context.Context, posts []*models.PostListItem, currentUserID int64) {
+	if len(posts) == 0 {
+		return
+	}
+
 	userIDStr := ""
 	if currentUserID != 0 {
 		userIDStr = strconv.FormatInt(currentUserID, 10)
 	}
 
+	// 批量获取评论数量
+	postIDs := make([]int64, 0, len(posts))
+	for _, post := range posts {
+		postIDs = append(postIDs, int64(post.PostID))
+	}
+	commentCountMap, _ := mysql.CountCommentsByPostIDs(postIDs)
+
 	for _, post := range posts {
 		postIDStr := strconv.FormatInt(int64(post.PostID), 10)
 		post.LikeCount = redis.GetPostVoteValue(ctx, postIDStr)
 		post.VoteCount = redis.GetPostVoteCount(ctx, postIDStr)
+		post.CommentCount = commentCountMap[int64(post.PostID)]
 		if userIDStr != "" {
 			post.CurrentUserVote = int8(redis.GetPostVoteScore(ctx, postIDStr, userIDStr))
 		}
