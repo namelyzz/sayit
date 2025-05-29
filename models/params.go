@@ -147,10 +147,11 @@ type ParamVote struct {
 }
 
 // ParamCommentList 获取评论列表请求参数
-// 通过 URL 查询参数传递，例如: /api/v1/post/123/comments?page=1&size=20
+// 通过 URL 查询参数传递，例如: /api/v1/post/123/comments?page=1&size=20&order=desc
 type ParamCommentList struct {
-	Page int `json:"page" form:"page"` // 页码（从1开始）
-	Size int `json:"size" form:"size"` // 每页数量（最大50）
+	Page  int    `json:"page" form:"page"`  // 页码（从1开始）
+	Size  int    `json:"size" form:"size"`  // 每页数量（最大50）
+	Order string `json:"order" form:"order"` // 排序方式: asc=正序(从旧到新), desc=倒序(从新到旧)
 }
 
 // ValidateAndSetDefaults 校验评论列表参数并设置默认值
@@ -160,5 +161,8 @@ func (p *ParamCommentList) ValidateAndSetDefaults() {
 	}
 	if p.Size <= 0 || p.Size > MaxPageSize {
 		p.Size = 20 // 评论默认每页20条
+	}
+	if p.Order != "asc" && p.Order != "desc" {
+		p.Order = "desc" // 默认倒序（最新评论在前）
 	}
 }

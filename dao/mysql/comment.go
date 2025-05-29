@@ -40,17 +40,22 @@ type CommentWithAuthor struct {
 	AuthorName string `json:"author_name" gorm:"column:author_name"`
 }
 
-// GetTopLevelComments 获取帖子的顶级评论（parent_id=0），按创建时间倒序，分页
-// 使用场景: 评论树的第一层，按时间倒序展示最新评论
-// SQL: SELECT c.*, u.username FROM comment c JOIN users u ON ... WHERE parent_id=0 ORDER BY create_time DESC
-func GetTopLevelComments(postID int64, page, size int) ([]*CommentWithAuthor, error) {
+// GetTopLevelComments 获取帖子的顶级评论（parent_id=0），分页
+// 使用场景: 评论树的第一层
+// 参数: order 为排序方式，"asc" 正序(从旧到新)，"desc" 倒序(从新到旧)
+// SQL: SELECT c.*, u.username FROM comment c JOIN users u ON ... WHERE parent_id=0 ORDER BY create_time ASC/DESC
+func GetTopLevelComments(postID int64, page, size int, order string) ([]*CommentWithAuthor, error) {
 	var comments []*CommentWithAuthor
 	offset := (page - 1) * size
+	orderClause := "c.create_time DESC"
+	if order == "asc" {
+		orderClause = "c.create_time ASC"
+	}
 	res := db.Table("comment c").
 		Select("c.*, u.username AS author_name").
 		Joins("LEFT JOIN users u ON c.author_id = u.user_id").
 		Where("c.post_id = ? AND c.parent_id = 0", postID).
-		Order("c.create_time DESC").
+		Order(orderClause).
 		Offset(offset).Limit(size).
 		Scan(&comments)
 	if res.Error != nil {
@@ -75,20 +80,24 @@ func CountTopLevelComments(postID int64) (int64, error) {
 	return count, nil
 }
 
-// GetChildCommentsByParentIDs 批量获取指定父评论ID列表的子评论，按创建时间正序
+// GetChildCommentsByParentIDs 批量获取指定父评论ID列表的子评论
 // 使用场景: 递归构建评论树时，批量获取某一层的所有子评论
-// 按创建时间正序（ASC）展示，最早的回复在前
+// 参数: order 为排序方式，"asc" 正序(从旧到新)，"desc" 倒序(从新到旧)
 // 注意: 空 parentIDs 时直接返回空切片，避免无意义的 SQL 查询
-func GetChildCommentsByParentIDs(parentIDs []int64) ([]*CommentWithAuthor, error) {
+func GetChildCommentsByParentIDs(parentIDs []int64, order string) ([]*CommentWithAuthor, error) {
 	if len(parentIDs) == 0 {
 		return []*CommentWithAuthor{}, nil
 	}
 	var comments []*CommentWithAuthor
+	orderClause := "c.create_time ASC"
+	if order == "desc" {
+		orderClause = "c.create_time DESC"
+	}
 	res := db.Table("comment c").
 		Select("c.*, u.username AS author_name").
 		Joins("LEFT JOIN users u ON c.author_id = u.user_id").
 		Where("c.parent_id IN ?", parentIDs).
-		Order("c.create_time ASC").
+		Order(orderClause).
 		Scan(&comments)
 	if res.Error != nil {
 		zap.L().Error("get child comments failed",

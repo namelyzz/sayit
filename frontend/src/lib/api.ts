@@ -349,10 +349,11 @@ class ApiClient {
 
   // ========== 评论相关 API ==========
 
-  async getCommentList(postId: string, page?: number, size?: number) {
+  async getCommentList(postId: string, page?: number, size?: number, order?: string) {
     const searchParams = new URLSearchParams();
     if (page) searchParams.set("page", page.toString());
     if (size) searchParams.set("size", size.toString());
+    if (order) searchParams.set("order", order);
     const query = searchParams.toString();
     return this.request<CommentListResponse>(`/post/${postId}/comments${query ? `?${query}` : ""}`);
   }

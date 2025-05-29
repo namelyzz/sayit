@@ -288,14 +288,14 @@ func newCommentPtr(id, parentID, rootID int64) *mysql.CommentWithAuthor {
 func TestGetCommentTree_EmptyComments(t *testing.T) {
 	defer restoreCommentTestHooks()()
 
-	getTopLevelCommentsFunc = func(postID int64, page, size int) ([]*mysql.CommentWithAuthor, error) {
+	getTopLevelCommentsFunc = func(postID int64, page, size int, order string) ([]*mysql.CommentWithAuthor, error) {
 		return []*mysql.CommentWithAuthor{}, nil
 	}
 	countTopLevelCommentsFunc = func(postID int64) (int64, error) {
 		return 0, nil
 	}
 
-	result, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20}, 0)
+	result, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20, Order: "desc"}, 0)
 
 	require.NoError(t, err)
 	assert.NotNil(t, result)
@@ -309,7 +309,7 @@ func TestGetCommentTree_TopLevelOnly(t *testing.T) {
 	c1 := newComment(1001, 0, 0)
 	c2 := newComment(1002, 0, 0)
 
-	getTopLevelCommentsFunc = func(postID int64, page, size int) ([]*mysql.CommentWithAuthor, error) {
+	getTopLevelCommentsFunc = func(postID int64, page, size int, order string) ([]*mysql.CommentWithAuthor, error) {
 		assert.Equal(t, int64(100), postID)
 		assert.Equal(t, 1, page)
 		assert.Equal(t, 20, size)
@@ -318,14 +318,14 @@ func TestGetCommentTree_TopLevelOnly(t *testing.T) {
 	countTopLevelCommentsFunc = func(postID int64) (int64, error) {
 		return 2, nil
 	}
-	getChildCommentsByParentFunc = func(parentIDs []int64) ([]*mysql.CommentWithAuthor, error) {
+	getChildCommentsByParentFunc = func(parentIDs []int64, order string) ([]*mysql.CommentWithAuthor, error) {
 		return []*mysql.CommentWithAuthor{}, nil
 	}
 	countChildCommentsByParentFunc = func(parentIDs []int64) (map[int64]int64, error) {
 		return map[int64]int64{}, nil
 	}
 
-	result, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20}, 0)
+	result, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20, Order: "desc"}, 0)
 
 	require.NoError(t, err)
 	assert.Len(t, result.List, 2)
@@ -339,7 +339,7 @@ func TestGetCommentTree_TopLevelOnly(t *testing.T) {
 func TestGetCommentTree_WithNestedChildren(t *testing.T) {
 	defer restoreCommentTestHooks()()
 
-	getTopLevelCommentsFunc = func(postID int64, page, size int) ([]*mysql.CommentWithAuthor, error) {
+	getTopLevelCommentsFunc = func(postID int64, page, size int, order string) ([]*mysql.CommentWithAuthor, error) {
 		return []*mysql.CommentWithAuthor{newCommentPtr(1001, 0, 0)}, nil
 	}
 	countTopLevelCommentsFunc = func(postID int64) (int64, error) {
@@ -347,7 +347,7 @@ func TestGetCommentTree_WithNestedChildren(t *testing.T) {
 	}
 
 	callCount := 0
-	getChildCommentsByParentFunc = func(parentIDs []int64) ([]*mysql.CommentWithAuthor, error) {
+	getChildCommentsByParentFunc = func(parentIDs []int64, order string) ([]*mysql.CommentWithAuthor, error) {
 		callCount++
 		switch callCount {
 		case 1:
@@ -368,7 +368,7 @@ func TestGetCommentTree_WithNestedChildren(t *testing.T) {
 		return map[int64]int64{parentIDs[0]: 1}, nil
 	}
 
-	result, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20}, 0)
+	result, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20, Order: "desc"}, 0)
 
 	require.NoError(t, err)
 	require.Len(t, result.List, 1)
@@ -393,11 +393,11 @@ func TestGetCommentTree_WithNestedChildren(t *testing.T) {
 func TestGetCommentTree_GetTopLevelFails(t *testing.T) {
 	defer restoreCommentTestHooks()()
 
-	getTopLevelCommentsFunc = func(postID int64, page, size int) ([]*mysql.CommentWithAuthor, error) {
+	getTopLevelCommentsFunc = func(postID int64, page, size int, order string) ([]*mysql.CommentWithAuthor, error) {
 		return nil, errors.New("db error")
 	}
 
-	_, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20}, 0)
+	_, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20, Order: "desc"}, 0)
 
 	require.Error(t, err)
 	assert.Equal(t, "db error", err.Error())
@@ -406,14 +406,14 @@ func TestGetCommentTree_GetTopLevelFails(t *testing.T) {
 func TestGetCommentTree_CountFails(t *testing.T) {
 	defer restoreCommentTestHooks()()
 
-	getTopLevelCommentsFunc = func(postID int64, page, size int) ([]*mysql.CommentWithAuthor, error) {
+	getTopLevelCommentsFunc = func(postID int64, page, size int, order string) ([]*mysql.CommentWithAuthor, error) {
 		return []*mysql.CommentWithAuthor{}, nil
 	}
 	countTopLevelCommentsFunc = func(postID int64) (int64, error) {
 		return 0, errors.New("count error")
 	}
 
-	_, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20}, 0)
+	_, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20, Order: "desc"}, 0)
 
 	require.Error(t, err)
 	assert.Equal(t, "count error", err.Error())
@@ -424,17 +424,17 @@ func TestGetCommentTree_GetChildrenFails(t *testing.T) {
 
 	c1 := newComment(1001, 0, 0)
 
-	getTopLevelCommentsFunc = func(postID int64, page, size int) ([]*mysql.CommentWithAuthor, error) {
+	getTopLevelCommentsFunc = func(postID int64, page, size int, order string) ([]*mysql.CommentWithAuthor, error) {
 		return []*mysql.CommentWithAuthor{&c1}, nil
 	}
 	countTopLevelCommentsFunc = func(postID int64) (int64, error) {
 		return 1, nil
 	}
-	getChildCommentsByParentFunc = func(parentIDs []int64) ([]*mysql.CommentWithAuthor, error) {
+	getChildCommentsByParentFunc = func(parentIDs []int64, order string) ([]*mysql.CommentWithAuthor, error) {
 		return nil, errors.New("children error")
 	}
 
-	_, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20}, 0)
+	_, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 1, Size: 20, Order: "desc"}, 0)
 
 	require.Error(t, err)
 	assert.Equal(t, "children error", err.Error())
@@ -445,7 +445,7 @@ func TestGetCommentTree_Pagination(t *testing.T) {
 
 	c1 := newComment(1001, 0, 0)
 
-	getTopLevelCommentsFunc = func(postID int64, page, size int) ([]*mysql.CommentWithAuthor, error) {
+	getTopLevelCommentsFunc = func(postID int64, page, size int, order string) ([]*mysql.CommentWithAuthor, error) {
 		assert.Equal(t, 2, page)
 		assert.Equal(t, 5, size)
 		return []*mysql.CommentWithAuthor{&c1}, nil
@@ -453,14 +453,14 @@ func TestGetCommentTree_Pagination(t *testing.T) {
 	countTopLevelCommentsFunc = func(postID int64) (int64, error) {
 		return 10, nil
 	}
-	getChildCommentsByParentFunc = func(parentIDs []int64) ([]*mysql.CommentWithAuthor, error) {
+	getChildCommentsByParentFunc = func(parentIDs []int64, order string) ([]*mysql.CommentWithAuthor, error) {
 		return []*mysql.CommentWithAuthor{}, nil
 	}
 	countChildCommentsByParentFunc = func(parentIDs []int64) (map[int64]int64, error) {
 		return map[int64]int64{}, nil
 	}
 
-	result, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 2, Size: 5}, 0)
+	result, err := GetCommentTree(context.Background(), 100, &models.ParamCommentList{Page: 2, Size: 5, Order: "desc"}, 0)
 
 	require.NoError(t, err)
 	assert.Equal(t, int64(10), result.Total)

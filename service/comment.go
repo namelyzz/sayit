@@ -127,7 +127,7 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 // GetCommentTree 获取帖子的评论树
 //
 // 数据获取流程:
-//  1. 分页获取顶级评论（parent_id=0，按时间倒序）
+//  1. 分页获取顶级评论（parent_id=0，按指定排序方式）
 //  2. 统计顶级评论总数（用于分页）
 //  3. 递归获取子评论，构建树形结构（最多 10 层）
 //  4. 处理已删除评论（content 替换为 [已删除]）
@@ -139,7 +139,7 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 //   - 批量查询点赞状态，使用 Pipeline
 func GetCommentTree(ctx context.Context, postID int64, p *models.ParamCommentList, currentUserID int64) (*models.CommentListResponse, error) {
 	// 1. 获取顶级评论
-	topComments, err := getTopLevelCommentsFunc(postID, p.Page, p.Size)
+	topComments, err := getTopLevelCommentsFunc(postID, p.Page, p.Size, p.Order)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func GetCommentTree(ctx context.Context, postID int64, p *models.ParamCommentLis
 	}
 
 	// 4. 递归填充子评论
-	if err := fillChildren(details, 1); err != nil {
+	if err := fillChildren(details, 1, p.Order); err != nil {
 		return nil, err
 	}
 
@@ -189,7 +189,7 @@ func GetCommentTree(ctx context.Context, postID int64, p *models.ParamCommentLis
 // 终止条件:
 //   - depth >= maxCommentDepth (10): 超过最大深度
 //   - parents 为空: 无更多子评论
-func fillChildren(parents []*models.CommentDetail, depth int) error {
+func fillChildren(parents []*models.CommentDetail, depth int, order string) error {
 	if depth >= maxCommentDepth || len(parents) == 0 {
 		return nil
 	}
@@ -201,7 +201,7 @@ func fillChildren(parents []*models.CommentDetail, depth int) error {
 	}
 
 	// 批量获取子评论
-	children, err := getChildCommentsByParentFunc(parentIDs)
+	children, err := getChildCommentsByParentFunc(parentIDs, order)
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ func fillChildren(parents []*models.CommentDetail, depth int) error {
 		}
 
 		// 递归填充下一层
-		if err := fillChildren(parent.Children, depth+1); err != nil {
+		if err := fillChildren(parent.Children, depth+1, order); err != nil {
 			return err
 		}
 	}

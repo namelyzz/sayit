@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, ArrowUpDown } from "lucide-react";
 import { apiClient, type CommentDetail } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils";
 import { Skeleton } from "./Skeleton";
@@ -23,6 +23,7 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [hasMore, setHasMore] = useState(true);
+  const [order, setOrder] = useState<"desc" | "asc">("desc");
 
   const pageSize = 20;
 
@@ -35,7 +36,7 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
     setError("");
 
     try {
-      const response = await apiClient.getCommentList(postId, pageNum, pageSize);
+      const response = await apiClient.getCommentList(postId, pageNum, pageSize, order);
       const data = response.data;
 
       if (append) {
@@ -52,9 +53,10 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [postId]);
+  }, [postId, order]);
 
   useEffect(() => {
+    setPage(1);
     fetchComments(1);
   }, [fetchComments]);
 
@@ -127,8 +129,15 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
         />
       ) : (
         <div>
-          <div className="mb-4 text-sm text-muted">
-            共 {total} 条评论
+          <div className="mb-4 flex items-center justify-between">
+            <span className="text-sm text-muted">共 {total} 条评论</span>
+            <button
+              onClick={() => setOrder(order === "desc" ? "asc" : "desc")}
+              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm text-muted-strong transition hover:bg-surface-soft hover:text-foreground"
+            >
+              <ArrowUpDown className="h-4 w-4" />
+              {order === "desc" ? "最新" : "最早"}
+            </button>
           </div>
 
           <div className="space-y-1">
