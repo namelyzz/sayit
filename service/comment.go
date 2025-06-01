@@ -29,8 +29,9 @@ var (
 	decrCommentLikeCountFunc      = mysql.DecrCommentLikeCount      // 评论点赞数-1
 	getTopLevelCommentsFunc       = mysql.GetTopLevelComments       // 获取顶级评论
 	countTopLevelCommentsFunc     = mysql.CountTopLevelComments     // 统计顶级评论数量
-	getChildCommentsByParentFunc  = mysql.GetChildCommentsByParentIDs  // 获取子评论
-	countChildCommentsByParentFunc = mysql.CountChildCommentsByParentIDs // 统计子评论数量
+	countChildCommentsByParentFunc = mysql.CountChildCommentsByParentIDs // 批量统计子评论数量
+	getChildCommentsByParentIDFunc  = mysql.GetChildCommentsByParentID   // 获取单个父评论的子评论（分页）
+	countChildCommentsByParentIDFunc = mysql.CountChildCommentsByParentID // 统计单个父评论的子评论数量
 	getCommentLikeScoreFunc       = mysql.GetCommentLikeScoreByAuthor  // 获取用户评论点赞总分
 
 	commentLikeFunc   = redis.CommentLikeComment   // Redis 点赞
@@ -124,19 +125,16 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 	return comment, nil
 }
 
-// GetCommentTree 获取帖子的评论树
+// GetCommentTree 获取帖子的顶级评论列表（不含子评论）
 //
 // 数据获取流程:
 //  1. 分页获取顶级评论（parent_id=0，按指定排序方式）
 //  2. 统计顶级评论总数（用于分页）
-//  3. 递归获取子评论，构建树形结构（最多 10 层）
+//  3. 批量统计每条评论的子评论数量（child_count）
 //  4. 处理已删除评论（content 替换为 [已删除]）
 //  5. 回填当前用户的点赞状态（仅登录用户）
 //
-// 性能优化:
-//   - 批量获取子评论，避免 N+1 查询
-//   - 批量统计子评论数量，使用 GROUP BY
-//   - 批量查询点赞状态，使用 Pipeline
+// 子评论不再递归加载，改为前端按需懒加载（通过 GET /comment/:id/children）
 func GetCommentTree(ctx context.Context, postID int64, p *models.ParamCommentList, currentUserID int64) (*models.CommentListResponse, error) {
 	// 1. 获取顶级评论
 	topComments, err := getTopLevelCommentsFunc(postID, p.Page, p.Size, p.Order)
@@ -150,7 +148,7 @@ func GetCommentTree(ctx context.Context, postID int64, p *models.ParamCommentLis
 		return nil, err
 	}
 
-	// 3. 转换为 CommentDetail 并递归构建子评论树
+	// 3. 转换为 CommentDetail
 	details := make([]*models.CommentDetail, 0, len(topComments))
 	for _, c := range topComments {
 		detail := &models.CommentDetail{
@@ -160,9 +158,19 @@ func GetCommentTree(ctx context.Context, postID int64, p *models.ParamCommentLis
 		details = append(details, detail)
 	}
 
-	// 4. 递归填充子评论
-	if err := fillChildren(details, 1, p.Order); err != nil {
-		return nil, err
+	// 4. 批量统计子评论数量
+	if len(details) > 0 {
+		parentIDs := make([]int64, 0, len(details))
+		for _, d := range details {
+			parentIDs = append(parentIDs, int64(d.CommentID))
+		}
+		childCountMap, err := countChildCommentsByParentFunc(parentIDs)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range details {
+			d.ChildCount = childCountMap[int64(d.CommentID)]
+		}
 	}
 
 	// 5. 处理已删除评论的内容
@@ -177,76 +185,73 @@ func GetCommentTree(ctx context.Context, postID int64, p *models.ParamCommentLis
 	}, nil
 }
 
-// fillChildren 递归填充子评论
+// GetCommentChildren 获取单条评论的子评论（分页）
 //
-// 算法:
-//  1. 收集当前层所有父评论ID
-//  2. 批量获取这些父评论的子评论（一次 SQL 查询）
-//  3. 批量统计子评论数量（一次 SQL 查询）
-//  4. 按 parent_id 分组，填充到对应的父评论
-//  5. 递归处理下一层（depth+1）
-//
-// 终止条件:
-//   - depth >= maxCommentDepth (10): 超过最大深度
-//   - parents 为空: 无更多子评论
-func fillChildren(parents []*models.CommentDetail, depth int, order string) error {
-	if depth >= maxCommentDepth || len(parents) == 0 {
-		return nil
-	}
-
-	// 收集所有父评论ID
-	parentIDs := make([]int64, 0, len(parents))
-	for _, p := range parents {
-		parentIDs = append(parentIDs, int64(p.CommentID))
-	}
-
-	// 批量获取子评论
-	children, err := getChildCommentsByParentFunc(parentIDs, order)
+// 数据获取流程:
+//  1. 验证父评论存在
+//  2. 分页获取直接子评论
+//  3. 统计子评论总数（用于分页和 has_more 判断）
+//  4. 批量统计每条子评论的 child_count（支持递归展开）
+//  5. 处理已删除评论
+//  6. 回填点赞状态
+func GetCommentChildren(ctx context.Context, parentID int64, p *models.ParamCommentChildren, currentUserID int64) (*models.CommentChildrenResponse, error) {
+	// 1. 验证父评论存在
+	_, err := getCommentByIDFunc(parentID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// 批量统计子评论数量
-	childCountMap, err := countChildCommentsByParentFunc(parentIDs)
+	// 2. 分页获取子评论
+	children, err := getChildCommentsByParentIDFunc(parentID, p.Page, p.Size, p.Order)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// 按 parent_id 分组
-	childrenByParent := make(map[int64][]*mysql.CommentWithAuthor, len(parents))
-	for _, child := range children {
-		pid := int64(child.ParentID)
-		childrenByParent[pid] = append(childrenByParent[pid], child)
+	// 3. 统计子评论总数
+	total, err := countChildCommentsByParentIDFunc(parentID)
+	if err != nil {
+		return nil, err
 	}
 
-	// 为每个父评论填充子评论
-	for _, parent := range parents {
-		pid := int64(parent.CommentID)
-		parent.ChildCount = childCountMap[pid]
-
-		childList := childrenByParent[pid]
-		if len(childList) == 0 {
-			continue
+	// 4. 转换为 CommentDetail
+	details := make([]*models.CommentDetail, 0, len(children))
+	for _, c := range children {
+		detail := &models.CommentDetail{
+			Comment:    &c.Comment,
+			AuthorName: c.AuthorName,
 		}
+		details = append(details, detail)
+	}
 
-		parent.Children = make([]*models.CommentDetail, 0, len(childList))
-		for _, c := range childList {
-			// 创建新的 Comment 副本，避免指针共享问题
-			commentCopy := c.Comment
-			childDetail := &models.CommentDetail{
-				Comment:    &commentCopy,
-				AuthorName: c.AuthorName,
-			}
-			parent.Children = append(parent.Children, childDetail)
+	// 5. 批量统计子评论的 child_count
+	if len(details) > 0 {
+		childIDs := make([]int64, 0, len(details))
+		for _, d := range details {
+			childIDs = append(childIDs, int64(d.CommentID))
 		}
-
-		// 递归填充下一层
-		if err := fillChildren(parent.Children, depth+1, order); err != nil {
-			return err
+		childCountMap, err := countChildCommentsByParentFunc(childIDs)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range details {
+			d.ChildCount = childCountMap[int64(d.CommentID)]
 		}
 	}
 
-	return nil
+	// 6. 处理已删除评论
+	markDeletedContent(details)
+
+	// 7. 回填点赞状态
+	fillCommentLiked(ctx, details, currentUserID)
+
+	// 8. 计算 has_more
+	hasMore := int64(p.Page*p.Size) < total
+
+	return &models.CommentChildrenResponse{
+		List:    details,
+		Total:   total,
+		HasMore: hasMore,
+	}, nil
 }
 
 // fillCommentLiked 批量回填评论点赞状态（仅登录用户）

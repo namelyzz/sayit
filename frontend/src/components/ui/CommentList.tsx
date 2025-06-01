@@ -147,6 +147,7 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
                 comment={comment}
                 currentUserId={currentUserId}
                 postAuthorId={postAuthorId}
+                order={order}
                 onReply={handleReply}
                 onDelete={handleDelete}
                 onLike={handleLike}

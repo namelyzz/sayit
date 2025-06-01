@@ -62,3 +62,10 @@ type CommentListResponse struct {
 	List  []*CommentDetail `json:"list"`  // 评论列表
 	Total int64            `json:"total"` // 顶级评论总数
 }
+
+// CommentChildrenResponse 子评论列表响应
+type CommentChildrenResponse struct {
+	List    []*CommentDetail `json:"list"`     // 子评论列表
+	Total   int64            `json:"total"`    // 子评论总数
+	HasMore bool             `json:"has_more"` // 是否还有更多子评论
+}

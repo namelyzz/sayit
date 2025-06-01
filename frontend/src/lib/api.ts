@@ -115,6 +115,12 @@ export interface CommentListResponse {
   total: number;
 }
 
+export interface CommentChildrenResponse {
+  list: CommentDetail[];
+  total: number;
+  has_more: boolean;
+}
+
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
@@ -356,6 +362,15 @@ class ApiClient {
     if (order) searchParams.set("order", order);
     const query = searchParams.toString();
     return this.request<CommentListResponse>(`/post/${postId}/comments${query ? `?${query}` : ""}`);
+  }
+
+  async getCommentChildren(commentId: string, page?: number, size?: number, order?: string) {
+    const searchParams = new URLSearchParams();
+    if (page) searchParams.set("page", page.toString());
+    if (size) searchParams.set("size", size.toString());
+    if (order) searchParams.set("order", order);
+    const query = searchParams.toString();
+    return this.request<CommentChildrenResponse>(`/comment/${commentId}/children${query ? `?${query}` : ""}`);
   }
 
   async createComment(postId: string, content: string, parentId?: string) {

@@ -107,6 +107,55 @@ func GetCommentListHandler(c *gin.Context) {
 	api.ResponseSuccess(c, data)
 }
 
+// GetCommentChildrenHandler 获取评论的子评论接口
+//
+// 路由: GET /api/v1/comment/:id/children (公开接口，可选JWT)
+// 路径参数: id - 父评论ID
+// 查询参数: page, size, order
+//
+// 返回结构: 子评论列表，每条评论包含:
+//   - 评论基本信息（content、author_name、create_time 等）
+//   - 子评论总数（child_count，支持递归展开）
+//   - 当前用户点赞状态（is_liked，未登录为 false）
+//   - has_more 标识是否还有更多子评论
+func GetCommentChildrenHandler(c *gin.Context) {
+	// 1. 解析父评论ID
+	parentIDStr := c.Param("id")
+	parentID, err := strconv.ParseInt(parentIDStr, 10, 64)
+	if err != nil {
+		zap.L().Error("get comment children with invalid parent id",
+			zap.String("parent_id", parentIDStr),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	// 2. 绑定查询参数
+	p := new(models.ParamCommentChildren)
+	if err := c.ShouldBindQuery(p); err != nil {
+		zap.L().Warn("invalid comment children query parameters", zap.Error(err))
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+	p.ValidateAndSetDefaults()
+
+	// 3. 获取当前用户ID（可选，未登录为0）
+	currentUserID := api.GetOptionalUserID(c)
+
+	// 4. 调用 service 层获取子评论
+	data, err := service.GetCommentChildren(c.Request.Context(), parentID, p, currentUserID)
+	if err != nil {
+		zap.L().Error("service.GetCommentChildren() failed",
+			zap.Int64("parentID", parentID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	// 5. 返回子评论列表
+	api.ResponseSuccess(c, data)
+}
+
 // DeleteCommentHandler 删除评论接口
 //
 // 路由: DELETE /api/v1/comment/:id (需要JWT认证)

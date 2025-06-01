@@ -166,3 +166,24 @@ func (p *ParamCommentList) ValidateAndSetDefaults() {
 		p.Order = "desc" // 默认倒序（最新评论在前）
 	}
 }
+
+// ParamCommentChildren 获取子评论列表请求参数
+// 通过 URL 查询参数传递，例如: /api/v1/comment/123/children?page=1&size=5&order=desc
+type ParamCommentChildren struct {
+	Page  int    `json:"page" form:"page"`  // 页码（从1开始）
+	Size  int    `json:"size" form:"size"`  // 每页数量（最大50）
+	Order string `json:"order" form:"order"` // 排序方式: asc=正序(从旧到新), desc=倒序(从新到旧)
+}
+
+// ValidateAndSetDefaults 校验子评论列表参数并设置默认值
+func (p *ParamCommentChildren) ValidateAndSetDefaults() {
+	if p.Page <= 0 {
+		p.Page = 1
+	}
+	if p.Size <= 0 || p.Size > MaxPageSize {
+		p.Size = 5 // 子评论默认每页5条
+	}
+	if p.Order != "asc" && p.Order != "desc" {
+		p.Order = "desc" // 默认倒序
+	}
+}

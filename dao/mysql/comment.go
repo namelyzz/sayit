@@ -252,3 +252,42 @@ func CountCommentsByPostIDs(postIDs []int64) (map[int64]int64, error) {
 	}
 	return countMap, nil
 }
+
+// GetChildCommentsByParentID 获取指定父评论的直接子评论（分页）
+// 使用场景: 子评论懒加载，点击展开时请求单个父评论的子评论
+// 参数: order 为排序方式，"asc" 正序(从旧到新)，"desc" 倒序(从新到旧)
+func GetChildCommentsByParentID(parentID int64, page, size int, order string) ([]*CommentWithAuthor, error) {
+	var comments []*CommentWithAuthor
+	offset := (page - 1) * size
+	orderClause := "c.create_time ASC"
+	if order == "desc" {
+		orderClause = "c.create_time DESC"
+	}
+	res := db.Table("comment c").
+		Select("c.*, u.username AS author_name").
+		Joins("LEFT JOIN users u ON c.author_id = u.user_id").
+		Where("c.parent_id = ?", parentID).
+		Order(orderClause).
+		Offset(offset).Limit(size).
+		Scan(&comments)
+	if res.Error != nil {
+		zap.L().Error("get child comments by parent id failed",
+			zap.Int64("parent_id", parentID),
+			zap.Error(res.Error))
+		return nil, res.Error
+	}
+	return comments, nil
+}
+
+// CountChildCommentsByParentID 统计指定父评论的直接子评论数量
+// 使用场景: 子评论分页计算和 has_more 判断
+func CountChildCommentsByParentID(parentID int64) (int64, error) {
+	var count int64
+	res := db.Model(&models.Comment{}).
+		Where("parent_id = ?", parentID).
+		Count(&count)
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return count, nil
+}
