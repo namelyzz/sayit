@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { MessageSquare, ArrowUpDown } from "lucide-react";
 import { apiClient, type CommentDetail } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils";
@@ -25,9 +25,13 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
   const [hasMore, setHasMore] = useState(true);
   const [order, setOrder] = useState<"desc" | "asc">("desc");
 
-  const pageSize = 20;
+  const pageSize = 5;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const fetchIdRef = useRef(0);
 
   const fetchComments = useCallback(async (pageNum: number, append = false) => {
+    const currentFetchId = ++fetchIdRef.current;
+
     if (pageNum === 1) {
       setLoading(true);
     } else {
@@ -39,6 +43,9 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
       const response = await apiClient.getCommentList(postId, pageNum, pageSize, order);
       const data = response.data;
 
+      // 如果期间有新的请求发起，丢弃本次结果
+      if (currentFetchId !== fetchIdRef.current) return;
+
       if (append) {
         setComments((prev) => [...prev, ...data.list]);
       } else {
@@ -48,10 +55,13 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
       setTotal(data.total);
       setHasMore(data.list.length === pageSize);
     } catch (err) {
+      if (currentFetchId !== fetchIdRef.current) return;
       setError(getErrorMessage(err, "加载评论失败"));
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (currentFetchId === fetchIdRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, [postId, order]);
 
@@ -60,31 +70,49 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
     fetchComments(1);
   }, [fetchComments]);
 
-  const handleLoadMore = () => {
+  const handleLoadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchComments(nextPage, true);
-  };
+    setPage((prev) => {
+      const nextPage = prev + 1;
+      fetchComments(nextPage, true);
+      return nextPage;
+    });
+  }, [loadingMore, hasMore, fetchComments]);
+
+  // IntersectionObserver 实现无限滚动
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, handleLoadMore]);
 
   const handleCreateComment = async (content: string) => {
     await apiClient.createComment(postId, content);
-    // 刷新评论列表
     setPage(1);
-    await fetchComments(1);
+    fetchComments(1);
   };
 
   const handleReply = async (parentId: string, content: string) => {
     await apiClient.createComment(postId, content, parentId);
-    // 刷新评论列表
     setPage(1);
-    await fetchComments(1);
+    fetchComments(1);
   };
 
   const handleDelete = async (commentId: string) => {
     await apiClient.deleteComment(commentId);
-    // 刷新评论列表
-    await fetchComments(1);
+    setPage(1);
+    fetchComments(1);
   };
 
   const handleLike = async (commentId: string) => {
@@ -156,16 +184,15 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
             ))}
           </div>
 
-          {/* 加载更多 */}
+          {/* 无限滚动哨兵元素 + 加载指示器 */}
           {hasMore && (
-            <div className="mt-6 text-center">
-              <button
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-                className="rounded-lg border border-border bg-surface px-6 py-2 text-sm font-medium text-muted-strong transition hover:bg-surface-soft hover:text-foreground disabled:opacity-50"
-              >
-                {loadingMore ? "加载中..." : "加载更多评论"}
-              </button>
+            <div ref={sentinelRef} className="py-4 text-center">
+              {loadingMore && (
+                <div className="flex items-center justify-center gap-2 text-sm text-muted">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted border-t-primary" />
+                  加载中...
+                </div>
+              )}
             </div>
           )}
         </div>
