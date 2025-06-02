@@ -22,6 +22,7 @@ const (
 	KeyUserFollowingPF = "user:following:" // Set前缀: 用户关注的人，sayit:user:following:<userID>，member=被关注用户ID
 	KeyUserFollowersPF = "user:followers:" // Set前缀: 用户的粉丝，sayit:user:followers:<userID>，member=粉丝用户ID
 	KeyCommentLikedPF  = "comment:liked:"  // Set前缀: 评论点赞用户集合，sayit:comment:liked:<commentID>，member=用户ID
+	KeyCommentCountPF  = "comment:count:"  // String前缀: 帖子评论计数缓存，sayit:comment:count:<postID>，value=评论数
 )
 
 func Init(cfg *config.RedisConfig) (err error) {

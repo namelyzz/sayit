@@ -17,6 +17,14 @@ const redisScanBatchSize = 100
 var (
 	nowFunc   = time.Now
 	genIDFunc = snowflake.GenID
+
+	// 评论数缓存相关 mock 变量
+	getCommentCountFunc      = redis.GetCommentCount       // Redis 获取单个帖子评论数
+	setCommentCountFunc      = redis.SetCommentCount       // Redis 设置单个帖子评论数
+	batchGetCommentCountFunc = redis.BatchGetCommentCount  // Redis 批量获取帖子评论数
+	batchSetCommentCountFunc = redis.BatchSetCommentCount  // Redis 批量设置帖子评论数
+	countCommentsByPostIDFunc  = mysql.CountCommentsByPostID  // MySQL 单个帖子评论数
+	countCommentsByPostIDsFunc = mysql.CountCommentsByPostIDs // MySQL 批量帖子评论数
 )
 
 // CreatePost 创建帖子的业务逻辑
@@ -100,8 +108,17 @@ func GetPostDetailByID(ctx context.Context, postID int64, currentUserID int64) (
 		currentUserVote = int8(redis.GetPostVoteScore(ctx, postIDStr, strconv.FormatInt(currentUserID, 10)))
 	}
 
-	// 5. 获取评论数量
-	commentCount, _ := mysql.CountCommentsByPostID(postID)
+	// 5. 获取评论数量（read-through 缓存）
+	commentCount, err := getCommentCountFunc(ctx, postID)
+	if err != nil {
+		// 缓存未命中，从 MySQL 查询并回填
+		commentCount, _ = countCommentsByPostIDFunc(postID)
+		if cacheErr := setCommentCountFunc(ctx, postID, commentCount); cacheErr != nil {
+			zap.L().Error("set comment count cache failed",
+				zap.Int64("postID", postID),
+				zap.Error(cacheErr))
+		}
+	}
 
 	return &models.PostDetail{
 		AuthorName:      user.Username,
@@ -139,12 +156,33 @@ func enrichPostVoteState(ctx context.Context, posts []*models.PostListItem, curr
 		userIDStr = strconv.FormatInt(currentUserID, 10)
 	}
 
-	// 批量获取评论数量
+	// 批量获取评论数量（read-through 缓存）
 	postIDs := make([]int64, 0, len(posts))
 	for _, post := range posts {
 		postIDs = append(postIDs, int64(post.PostID))
 	}
-	commentCountMap, _ := mysql.CountCommentsByPostIDs(postIDs)
+	commentCountMap := batchGetCommentCountFunc(ctx, postIDs)
+
+	// 找出缓存未命中的 postIDs
+	missedIDs := make([]int64, 0)
+	for _, pid := range postIDs {
+		if _, ok := commentCountMap[pid]; !ok {
+			missedIDs = append(missedIDs, pid)
+		}
+	}
+
+	// 批量查询 MySQL 并回填缓存
+	if len(missedIDs) > 0 {
+		dbCountMap, _ := countCommentsByPostIDsFunc(missedIDs)
+		for pid, count := range dbCountMap {
+			commentCountMap[pid] = count
+		}
+		// 批量回填 Redis（失败只记日志）
+		if err := batchSetCommentCountFunc(ctx, dbCountMap); err != nil {
+			zap.L().Error("batch set comment count cache failed",
+				zap.Error(err))
+		}
+	}
 
 	for _, post := range posts {
 		postIDStr := strconv.FormatInt(int64(post.PostID), 10)

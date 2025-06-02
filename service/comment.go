@@ -37,6 +37,8 @@ var (
 	commentLikeFunc   = redis.CommentLikeComment   // Redis 点赞
 	commentUnlikeFunc = redis.CommentUnlikeComment  // Redis 取消点赞
 	isCommentLikedFunc = redis.IsCommentLikedByUser // Redis 检查点赞
+	incrCommentCountFunc = redis.IncrCommentCount   // Redis 帖子评论数+1
+	decrCommentCountFunc = redis.DecrCommentCount   // Redis 帖子评论数-1
 )
 
 // CreateComment 创建评论的业务逻辑
@@ -118,6 +120,13 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 			zap.Int64("author_id", userID),
 			zap.Error(err))
 		return nil, err
+	}
+
+	// 8. 更新 Redis 评论数缓存（失败只记日志，不阻塞）
+	if err := incrCommentCountFunc(ctx, postID); err != nil {
+		zap.L().Error("incr comment count cache failed",
+			zap.Int64("post_id", postID),
+			zap.Error(err))
 	}
 
 	_ = post // 避免未使用变量警告
@@ -339,7 +348,18 @@ func DeleteComment(ctx context.Context, userID, commentID int64) error {
 	}
 
 	// 4. 软删除
-	return softDeleteCommentFunc(commentID)
+	if err := softDeleteCommentFunc(commentID); err != nil {
+		return err
+	}
+
+	// 5. 更新 Redis 评论数缓存（失败只记日志，不阻塞）
+	if err := decrCommentCountFunc(ctx, int64(comment.PostID)); err != nil {
+		zap.L().Error("decr comment count cache failed",
+			zap.Int64("post_id", int64(comment.PostID)),
+			zap.Error(err))
+	}
+
+	return nil
 }
 
 // markDeletedContent 递归处理已删除评论的内容

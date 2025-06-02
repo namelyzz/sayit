@@ -28,6 +28,8 @@ func restoreCommentTestHooks() func() {
 	origCommentLike := commentLikeFunc
 	origCommentUnlike := commentUnlikeFunc
 	origIsCommentLiked := isCommentLikedFunc
+	origIncrCommentCount := incrCommentCountFunc
+	origDecrCommentCount := decrCommentCountFunc
 	origGenID := genIDFunc
 
 	return func() {
@@ -46,6 +48,8 @@ func restoreCommentTestHooks() func() {
 		commentLikeFunc = origCommentLike
 		commentUnlikeFunc = origCommentUnlike
 		isCommentLikedFunc = origIsCommentLiked
+		incrCommentCountFunc = origIncrCommentCount
+		decrCommentCountFunc = origDecrCommentCount
 		genIDFunc = origGenID
 	}
 }
@@ -63,6 +67,9 @@ func TestCreateComment_Success_TopLevel(t *testing.T) {
 	var createdComment *models.Comment
 	createCommentFunc = func(c *models.Comment) error {
 		createdComment = c
+		return nil
+	}
+	incrCommentCountFunc = func(ctx context.Context, postID int64) error {
 		return nil
 	}
 
@@ -105,6 +112,9 @@ func TestCreateComment_Success_ReplyToTopLevel(t *testing.T) {
 	createCommentFunc = func(c *models.Comment) error {
 		return nil
 	}
+	incrCommentCountFunc = func(ctx context.Context, postID int64) error {
+		return nil
+	}
 
 	comment, err := CreateComment(context.Background(), 42, &models.ParamCreateComment{
 		PostID:   "100",
@@ -137,6 +147,9 @@ func TestCreateComment_Success_ReplyToNested(t *testing.T) {
 	}
 
 	createCommentFunc = func(c *models.Comment) error {
+		return nil
+	}
+	incrCommentCountFunc = func(ctx context.Context, postID int64) error {
 		return nil
 	}
 
@@ -587,6 +600,9 @@ func TestDeleteComment_Success_ByCommentAuthor(t *testing.T) {
 		deletedID = commentID
 		return nil
 	}
+	decrCommentCountFunc = func(ctx context.Context, postID int64) error {
+		return nil
+	}
 
 	err := DeleteComment(context.Background(), 42, 1001) // userID = 评论作者
 
@@ -615,6 +631,9 @@ func TestDeleteComment_Success_ByPostAuthor(t *testing.T) {
 	var deletedID int64
 	softDeleteCommentFunc = func(commentID int64) error {
 		deletedID = commentID
+		return nil
+	}
+	decrCommentCountFunc = func(ctx context.Context, postID int64) error {
 		return nil
 	}
 

@@ -73,3 +73,90 @@ func BatchIsCommentLikedByUser(ctx context.Context, commentIDs []int64, userID i
 	}
 	return result
 }
+
+// IncrCommentCount 帖子评论数 +1（缓存）
+// 调用时机: 评论创建成功后
+// Redis Key: sayit:comment:count:<postID>，String 类型
+// 如果 Key 不存在，INCR 会自动创建并设为 1
+func IncrCommentCount(ctx context.Context, postID int64) error {
+	key := getRedisKey(KeyCommentCountPF + strconv.FormatInt(postID, 10))
+	return client.Incr(ctx, key).Err()
+}
+
+// DecrCommentCount 帖子评论数 -1（缓存）
+// 调用时机: 评论删除成功后
+// 使用 Lua 脚本确保不会减成负数
+func DecrCommentCount(ctx context.Context, postID int64) error {
+	key := getRedisKey(KeyCommentCountPF + strconv.FormatInt(postID, 10))
+	// Lua 脚本: 只有当前值 > 0 时才减 1
+	script := redis.NewScript(`
+		local val = tonumber(redis.call('GET', KEYS[1]))
+		if val == nil then return nil end
+		if val > 0 then return redis.call('DECR', KEYS[1]) end
+		return val
+	`)
+	_, err := script.Run(ctx, client, []string{key}).Result()
+	// key 不存在时返回 redis.Nil，属于正常情况
+	if err == redis.Nil {
+		return nil
+	}
+	return err
+}
+
+// GetCommentCount 获取帖子评论数缓存
+// 返回值: 评论数和 error
+// 缓存未命中时返回 (0, redis.Nil)，service 层据此判断是否需要回填
+func GetCommentCount(ctx context.Context, postID int64) (int64, error) {
+	key := getRedisKey(KeyCommentCountPF + strconv.FormatInt(postID, 10))
+	val, err := client.Get(ctx, key).Int64()
+	if err != nil {
+		return 0, err
+	}
+	return val, nil
+}
+
+// SetCommentCount 设置帖子评论数缓存（回填用）
+// 调用时机: 缓存未命中时，从 MySQL 查询后回填
+func SetCommentCount(ctx context.Context, postID, count int64) error {
+	key := getRedisKey(KeyCommentCountPF + strconv.FormatInt(postID, 10))
+	return client.Set(ctx, key, count, 0).Err() // 不设 TTL
+}
+
+// BatchGetCommentCount 批量获取帖子评论数缓存
+// 使用 Pipeline 批量执行 GET，减少网络往返次数
+// 返回 map[postID]count，仅包含缓存命中的条目
+func BatchGetCommentCount(ctx context.Context, postIDs []int64) map[int64]int64 {
+	if len(postIDs) == 0 {
+		return nil
+	}
+	pipe := client.Pipeline()
+	cmds := make(map[int64]*redis.StringCmd, len(postIDs))
+	for _, pid := range postIDs {
+		key := getRedisKey(KeyCommentCountPF + strconv.FormatInt(pid, 10))
+		cmds[pid] = pipe.Get(ctx, key)
+	}
+	_, _ = pipe.Exec(ctx)
+	result := make(map[int64]int64, len(postIDs))
+	for pid, cmd := range cmds {
+		val, err := cmd.Int64()
+		if err == nil {
+			result[pid] = val
+		}
+	}
+	return result
+}
+
+// BatchSetCommentCount 批量设置帖子评论数缓存（批量回填）
+// 使用 Pipeline 批量执行 SET，减少网络往返次数
+func BatchSetCommentCount(ctx context.Context, countMap map[int64]int64) error {
+	if len(countMap) == 0 {
+		return nil
+	}
+	pipe := client.Pipeline()
+	for postID, count := range countMap {
+		key := getRedisKey(KeyCommentCountPF + strconv.FormatInt(postID, 10))
+		pipe.Set(ctx, key, count, 0)
+	}
+	_, err := pipe.Exec(ctx)
+	return err
+}
