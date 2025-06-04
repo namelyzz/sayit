@@ -3,12 +3,14 @@ package redis
 import (
 	"context"
 	"fmt"
+	"github.com/go-redis/redis_rate/v10"
 	"github.com/namelyzz/sayit/config"
 	"github.com/redis/go-redis/v9"
 )
 
 var (
-	client *redis.Client
+	client  *redis.Client
+	limiter *redis_rate.Limiter
 )
 
 // Redis Key 常量定义
@@ -22,7 +24,8 @@ const (
 	KeyUserFollowingPF = "user:following:" // Set前缀: 用户关注的人，sayit:user:following:<userID>，member=被关注用户ID
 	KeyUserFollowersPF = "user:followers:" // Set前缀: 用户的粉丝，sayit:user:followers:<userID>，member=粉丝用户ID
 	KeyCommentLikedPF  = "comment:liked:"  // Set前缀: 评论点赞用户集合，sayit:comment:liked:<commentID>，member=用户ID
-	KeyCommentCountPF  = "comment:count:"  // String前缀: 帖子评论计数缓存，sayit:comment:count:<postID>，value=评论数
+	KeyCommentCountPF       = "comment:count:"       // String前缀: 帖子评论计数缓存，sayit:comment:count:<postID>，value=评论数
+	KeyRateLimitCommentPF   = "ratelimit:comment:"   // Sorted Set前缀: 评论创建频率限制，sayit:ratelimit:comment:<userID>
 )
 
 func Init(cfg *config.RedisConfig) (err error) {
@@ -38,6 +41,9 @@ func Init(cfg *config.RedisConfig) (err error) {
 	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
+
+	// 初始化频率限制器
+	limiter = redis_rate.NewLimiter(client)
 
 	return nil
 }

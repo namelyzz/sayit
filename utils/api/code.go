@@ -12,6 +12,8 @@ const (
 
 	CodeNeedLogin
 	CodeInvalidToken
+
+	CodeRateLimitExceeded
 )
 
 var codeMsgMap = map[ResCode]string{
@@ -24,6 +26,8 @@ var codeMsgMap = map[ResCode]string{
 
 	CodeNeedLogin:    "需要登录",
 	CodeInvalidToken: "无效的token",
+
+	CodeRateLimitExceeded: "您发言太快了，请休息一下再试。",
 }
 
 func (c ResCode) Msg() string {

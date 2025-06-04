@@ -39,6 +39,7 @@ var (
 	isCommentLikedFunc = redis.IsCommentLikedByUser // Redis 检查点赞
 	incrCommentCountFunc = redis.IncrCommentCount   // Redis 帖子评论数+1
 	decrCommentCountFunc = redis.DecrCommentCount   // Redis 帖子评论数-1
+	checkCommentRateLimitFunc = redis.CheckCommentRateLimit // Redis 评论创建频率限制
 )
 
 // CreateComment 创建评论的业务逻辑
@@ -59,7 +60,20 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 		return nil, api.ErrorInvalidID
 	}
 
-	// 2. 验证帖子是否存在
+	// 2. 频率限制检查（Redis 故障时放行，不影响正常用户）
+	allowed, retryAfter, rateLimitErr := checkCommentRateLimitFunc(ctx, userID)
+	if rateLimitErr != nil {
+		zap.L().Warn("rate limit check failed, allowing request",
+			zap.Int64("userID", userID),
+			zap.Error(rateLimitErr))
+	} else if !allowed {
+		zap.L().Info("comment rate limit exceeded",
+			zap.Int64("userID", userID),
+			zap.Duration("retryAfter", retryAfter))
+		return nil, api.ErrorRateLimitExceeded
+	}
+
+	// 3. 验证帖子是否存在
 	post, err := getPostByIDFunc(postID)
 	if err != nil {
 		zap.L().Error("post not found",
@@ -68,7 +82,7 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 		return nil, err
 	}
 
-	// 3. 解析父评论ID
+	// 4. 解析父评论ID
 	var parentID int64
 	if p.ParentID != "" {
 		parentID, err = strconv.ParseInt(p.ParentID, 10, 64)
@@ -77,7 +91,7 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 		}
 	}
 
-	// 4. 如果是回复评论，验证父评论
+	// 5. 如果是回复评论，验证父评论
 	var rootID int64
 	if parentID != 0 {
 		parentComment, err := getCommentByIDFunc(parentID)
@@ -99,10 +113,10 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 		}
 	}
 
-	// 5. 生成评论ID
+	// 6. 生成评论ID
 	commentID := genIDFunc()
 
-	// 6. 构造评论对象
+	// 7. 构造评论对象
 	comment := &models.Comment{
 		CommentID: models.SnowflakeID(commentID),
 		PostID:    models.SnowflakeID(postID),
@@ -113,7 +127,7 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 		Status:    1,
 	}
 
-	// 7. 入库
+	// 8. 入库
 	if err := createCommentFunc(comment); err != nil {
 		zap.L().Error("create comment failed",
 			zap.Int64("post_id", postID),
@@ -122,7 +136,7 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 		return nil, err
 	}
 
-	// 8. 更新 Redis 评论数缓存（失败只记日志，不阻塞）
+	// 9. 更新 Redis 评论数缓存（失败只记日志，不阻塞）
 	if err := incrCommentCountFunc(ctx, postID); err != nil {
 		zap.L().Error("incr comment count cache failed",
 			zap.Int64("post_id", postID),

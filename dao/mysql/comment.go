@@ -291,3 +291,86 @@ func CountChildCommentsByParentID(parentID int64) (int64, error) {
 	}
 	return count, nil
 }
+
+// GetNormalCommentIDs 分批获取正常状态的评论ID（游标分页）
+// 使用场景: 对账任务遍历所有评论
+// 参数: lastID 为上一批最后一条记录的 ID，batchSize 为每批数量
+// 返回的 ID 按 comment_id 升序排列，方便游标翻页
+func GetNormalCommentIDs(lastID int64, batchSize int) ([]int64, error) {
+	var ids []int64
+	res := db.Model(&models.Comment{}).
+		Where("status = 1 AND comment_id > ?", lastID).
+		Order("comment_id ASC").
+		Limit(batchSize).
+		Pluck("comment_id", &ids)
+	if res.Error != nil {
+		zap.L().Error("get normal comment ids failed",
+			zap.Int64("lastID", lastID),
+			zap.Error(res.Error))
+		return nil, res.Error
+	}
+	return ids, nil
+}
+
+// GetCommentLikeCounts 批量获取评论的 like_count
+// 使用场景: 对账任务，获取 MySQL 中的 like_count 与 Redis 对比
+// 返回 map[commentID]like_count
+func GetCommentLikeCounts(commentIDs []int64) (map[int64]int64, error) {
+	if len(commentIDs) == 0 {
+		return map[int64]int64{}, nil
+	}
+	type result struct {
+		CommentID int64 `gorm:"column:comment_id"`
+		LikeCount int64 `gorm:"column:like_count"`
+	}
+	var results []result
+	res := db.Model(&models.Comment{}).
+		Select("comment_id, like_count").
+		Where("comment_id IN ?", commentIDs).
+		Scan(&results)
+	if res.Error != nil {
+		zap.L().Error("get comment like counts failed",
+			zap.Int("comment_count", len(commentIDs)),
+			zap.Error(res.Error))
+		return nil, res.Error
+	}
+	countMap := make(map[int64]int64, len(results))
+	for _, r := range results {
+		countMap[r.CommentID] = r.LikeCount
+	}
+	return countMap, nil
+}
+
+// BatchUpdateLikeCount 批量更新评论的 like_count
+// 使用场景: 对账任务，修复不一致的 like_count
+// 使用 CASE WHEN 实现批量不同值更新
+func BatchUpdateLikeCount(countMap map[int64]int64) error {
+	if len(countMap) == 0 {
+		return nil
+	}
+
+	// 构建 CASE WHEN SQL
+	// UPDATE comment SET like_count = CASE comment_id WHEN ? THEN ? WHEN ? THEN ? ... END WHERE comment_id IN (?, ?, ...)
+	ids := make([]int64, 0, len(countMap))
+	for id := range countMap {
+		ids = append(ids, id)
+	}
+
+	// 使用事务逐条更新（简单可靠，对账任务非高频操作）
+	// 如果评论数量大，可以改为批量 CASE WHEN，但复杂度较高
+	return db.Transaction(func(tx *gorm.DB) error {
+		for commentID, likeCount := range countMap {
+			res := tx.Model(&models.Comment{}).
+				Where("comment_id = ?", commentID).
+				Update("like_count", likeCount)
+			if res.Error != nil {
+				zap.L().Error("batch update like_count failed",
+					zap.Int64("comment_id", commentID),
+					zap.Int64("like_count", likeCount),
+					zap.Error(res.Error))
+				return res.Error
+			}
+		}
+		return nil
+	})
+}

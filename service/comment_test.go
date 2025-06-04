@@ -8,6 +8,7 @@ import (
 
 	"github.com/namelyzz/sayit/dao/mysql"
 	"github.com/namelyzz/sayit/models"
+	"github.com/namelyzz/sayit/utils/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,6 +31,7 @@ func restoreCommentTestHooks() func() {
 	origIsCommentLiked := isCommentLikedFunc
 	origIncrCommentCount := incrCommentCountFunc
 	origDecrCommentCount := decrCommentCountFunc
+	origCheckCommentRateLimit := checkCommentRateLimitFunc
 	origGenID := genIDFunc
 
 	return func() {
@@ -50,6 +52,7 @@ func restoreCommentTestHooks() func() {
 		isCommentLikedFunc = origIsCommentLiked
 		incrCommentCountFunc = origIncrCommentCount
 		decrCommentCountFunc = origDecrCommentCount
+		checkCommentRateLimitFunc = origCheckCommentRateLimit
 		genIDFunc = origGenID
 	}
 }
@@ -59,6 +62,9 @@ func TestCreateComment_Success_TopLevel(t *testing.T) {
 
 	genIDFunc = func() int64 { return 1001 }
 
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
 	getPostByIDFunc = func(postID int64) (*models.Post, error) {
 		assert.Equal(t, int64(100), postID)
 		return &models.Post{PostID: 100}, nil
@@ -95,6 +101,9 @@ func TestCreateComment_Success_ReplyToTopLevel(t *testing.T) {
 
 	genIDFunc = func() int64 { return 1002 }
 
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
 	getPostByIDFunc = func(postID int64) (*models.Post, error) {
 		return &models.Post{PostID: 100}, nil
 	}
@@ -132,6 +141,9 @@ func TestCreateComment_Success_ReplyToNested(t *testing.T) {
 
 	genIDFunc = func() int64 { return 1003 }
 
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
 	getPostByIDFunc = func(postID int64) (*models.Post, error) {
 		return &models.Post{PostID: 100}, nil
 	}
@@ -179,6 +191,9 @@ func TestCreateComment_InvalidPostID(t *testing.T) {
 func TestCreateComment_InvalidParentID(t *testing.T) {
 	defer restoreCommentTestHooks()()
 
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
 	getPostByIDFunc = func(postID int64) (*models.Post, error) {
 		return &models.Post{PostID: 100}, nil
 	}
@@ -196,6 +211,9 @@ func TestCreateComment_InvalidParentID(t *testing.T) {
 func TestCreateComment_PostNotFound(t *testing.T) {
 	defer restoreCommentTestHooks()()
 
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
 	getPostByIDFunc = func(postID int64) (*models.Post, error) {
 		return nil, errors.New("record not found")
 	}
@@ -212,6 +230,9 @@ func TestCreateComment_PostNotFound(t *testing.T) {
 func TestCreateComment_ParentCommentNotFound(t *testing.T) {
 	defer restoreCommentTestHooks()()
 
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
 	getPostByIDFunc = func(postID int64) (*models.Post, error) {
 		return &models.Post{PostID: 100}, nil
 	}
@@ -233,6 +254,9 @@ func TestCreateComment_ParentCommentNotFound(t *testing.T) {
 func TestCreateComment_ParentCommentWrongPost(t *testing.T) {
 	defer restoreCommentTestHooks()()
 
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
 	getPostByIDFunc = func(postID int64) (*models.Post, error) {
 		return &models.Post{PostID: 100}, nil
 	}
@@ -260,6 +284,9 @@ func TestCreateComment_CreateFails(t *testing.T) {
 
 	genIDFunc = func() int64 { return 1001 }
 
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
 	getPostByIDFunc = func(postID int64) (*models.Post, error) {
 		return &models.Post{PostID: 100}, nil
 	}
@@ -275,6 +302,48 @@ func TestCreateComment_CreateFails(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, "db error", err.Error())
+}
+
+func TestCreateComment_RateLimitExceeded(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return false, 10 * time.Second, nil // 超限，需等待 10 秒
+	}
+
+	_, err := CreateComment(context.Background(), 42, &models.ParamCreateComment{
+		PostID:  "100",
+		Content: "hello",
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, api.ErrorRateLimitExceeded, err)
+}
+
+func TestCreateComment_RateLimitRedisFails(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, errors.New("redis error") // Redis 故障，放行
+	}
+	genIDFunc = func() int64 { return 1001 }
+	getPostByIDFunc = func(postID int64) (*models.Post, error) {
+		return &models.Post{PostID: 100}, nil
+	}
+	createCommentFunc = func(c *models.Comment) error {
+		return nil
+	}
+	incrCommentCountFunc = func(ctx context.Context, postID int64) error {
+		return nil
+	}
+
+	comment, err := CreateComment(context.Background(), 42, &models.ParamCreateComment{
+		PostID:  "100",
+		Content: "hello",
+	})
+
+	require.NoError(t, err) // Redis 故障时放行，创建成功
+	require.NotNil(t, comment)
 }
 
 // ========== GetCommentTree 测试 ==========

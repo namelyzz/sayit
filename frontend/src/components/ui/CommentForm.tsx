@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MessageSquare } from "lucide-react";
+import { getErrorMessage } from "@/lib/utils";
 import Button from "./Button";
 import { Textarea } from "./Field";
 
@@ -20,18 +21,27 @@ export default function CommentForm({
 }: CommentFormProps) {
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async () => {
     const trimmed = content.trim();
     if (!trimmed || submitting) return;
 
     setSubmitting(true);
+    setError("");
     try {
       await onSubmit(trimmed);
       setContent("");
+    } catch (err) {
+      setError(getErrorMessage(err, "评论失败"));
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
+    if (error) setError("");
   };
 
   return (
@@ -40,10 +50,13 @@ export default function CommentForm({
         rows={compact ? 2 : 3}
         placeholder={placeholder}
         value={content}
-        onChange={(e) => setContent(e.target.value)}
+        onChange={handleChange}
         autoFocus={autoFocus}
         disabled={submitting}
       />
+      {error && (
+        <div className="mt-2 text-sm text-danger">{error}</div>
+      )}
       <div className="mt-2 flex justify-end">
         <Button
           onClick={handleSubmit}

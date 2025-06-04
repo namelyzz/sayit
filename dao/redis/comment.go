@@ -160,3 +160,29 @@ func BatchSetCommentCount(ctx context.Context, countMap map[int64]int64) error {
 	_, err := pipe.Exec(ctx)
 	return err
 }
+
+// BatchGetCommentLikeCount 批量获取评论的真实点赞数（Redis SCARD）
+// 使用场景: 对账任务，批量获取 Redis 中的真实点赞数
+// 使用 Pipeline 批量执行 SCARD，减少网络往返次数
+// 返回 map[commentID]count，Key 不存在时 count 为 0
+func BatchGetCommentLikeCount(ctx context.Context, commentIDs []int64) map[int64]int64 {
+	if len(commentIDs) == 0 {
+		return nil
+	}
+	pipe := client.Pipeline()
+	cmds := make(map[int64]*redis.IntCmd, len(commentIDs))
+	for _, cid := range commentIDs {
+		key := getRedisKey(KeyCommentLikedPF + strconv.FormatInt(cid, 10))
+		cmds[cid] = pipe.SCard(ctx, key)
+	}
+	_, _ = pipe.Exec(ctx)
+	result := make(map[int64]int64, len(commentIDs))
+	for cid, cmd := range cmds {
+		val, err := cmd.Result()
+		if err == nil {
+			result[cid] = val
+		}
+		// Key 不存在时 SCARD 返回 0，无需特殊处理
+	}
+	return result
+}

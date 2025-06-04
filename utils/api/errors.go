@@ -15,5 +15,6 @@ var (
 	ErrorVoteTimeExpire = errors.New("投票时间已过")
 	ErrorVoteRepeated   = errors.New("重复的投票")
 
-	ErrorLikeRepeated = errors.New("重复的点赞")
+	ErrorLikeRepeated     = errors.New("重复的点赞")
+	ErrorRateLimitExceeded = errors.New("您发言太快了，请休息一下再试。")
 )

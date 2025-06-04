@@ -10,6 +10,7 @@ import (
 	"github.com/namelyzz/sayit/router"
 	"github.com/namelyzz/sayit/service"
 	"github.com/namelyzz/sayit/utils/snowflake"
+	"time"
 )
 
 func main() {
@@ -35,6 +36,7 @@ func main() {
 	}
 	defer redis.Close()
 	go service.StartOutboxWorker(context.Background())
+	go service.StartLikeCountReconciler(context.Background(), time.Hour)
 
 	if err := snowflake.Init(config.Conf.StartTime, config.Conf.MachineID); err != nil {
 		fmt.Printf("init snowflake failed, err:%v\n", err)

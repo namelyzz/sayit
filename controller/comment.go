@@ -42,6 +42,11 @@ func CreateCommentHandler(c *gin.Context) {
 	// 4. 调用 service 层执行创建评论的业务逻辑
 	comment, err := service.CreateComment(ctx, userID, p)
 	if err != nil {
+		// 频率限制错误，返回对应错误码
+		if err == api.ErrorRateLimitExceeded {
+			api.ResponseError(c, api.CodeRateLimitExceeded)
+			return
+		}
 		zap.L().Error("service.CreateComment() failed",
 			zap.Error(err),
 			zap.Int64("userID", userID),
