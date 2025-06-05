@@ -121,6 +121,20 @@ export interface CommentChildrenResponse {
   has_more: boolean;
 }
 
+export interface UserCommentItem {
+  comment_id: string;
+  post_id: string;
+  post_title: string;
+  content: string;
+  like_count: number;
+  create_time: string;
+}
+
+export interface UserCommentListResponse {
+  list: UserCommentItem[];
+  total: number;
+}
+
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
@@ -247,6 +261,10 @@ class ApiClient {
     if (params?.size) searchParams.set("size", params.size.toString());
     const query = searchParams.toString();
     return this.request<UserFollowListResponse>(`/users/${id}/following${query ? `?${query}` : ""}`);
+  }
+
+  async getUserComments(id: string) {
+    return this.request<UserCommentListResponse>(`/users/${id}/comments`);
   }
 
   async getCommunities() {

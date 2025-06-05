@@ -69,3 +69,20 @@ type CommentChildrenResponse struct {
 	Total   int64            `json:"total"`    // 子评论总数
 	HasMore bool             `json:"has_more"` // 是否还有更多子评论
 }
+
+// UserCommentItem 用户评论列表项，用于个人中心展示用户最新评论
+// 包含帖子标题，便于前端展示"在哪个帖子下评论了什么"
+type UserCommentItem struct {
+	CommentID  SnowflakeID `json:"comment_id" gorm:"column:comment_id"`
+	PostID     SnowflakeID `json:"post_id" gorm:"column:post_id"`
+	PostTitle  string      `json:"post_title" gorm:"column:post_title"` // 帖子标题
+	Content    string      `json:"content" gorm:"column:content"`
+	LikeCount  int64       `json:"like_count" gorm:"column:like_count"`
+	CreateTime time.Time   `json:"create_time" gorm:"column:create_time"`
+}
+
+// UserCommentListResponse 用户评论列表响应
+type UserCommentListResponse struct {
+	List  []*UserCommentItem `json:"list"`  // 评论列表
+	Total int64              `json:"total"` // 用户评论总数
+}

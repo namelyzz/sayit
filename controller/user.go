@@ -211,6 +211,32 @@ func GetUserPostsHandler(c *gin.Context) {
 	api.ResponseSuccess(c, posts)
 }
 
+// GetUserCommentsHandler 获取用户最新评论列表
+// 路由: GET /api/v1/users/:id/comments (公开接口，可选JWT)
+// 返回用户最新 5 条评论，包含帖子标题
+func GetUserCommentsHandler(c *gin.Context) {
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	data, err := service.GetUserComments(c.Request.Context(), targetUserID, 5, api.GetOptionalUserID(c))
+	if err != nil {
+		if errors.Is(err, api.ErrorUserNotExist) {
+			api.ResponseError(c, api.CodeUserNotExist)
+			return
+		}
+		zap.L().Error("get user comments failed",
+			zap.Int64("target_user_id", targetUserID),
+			zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, data)
+}
+
 // FollowUserHandler 关注用户。
 // 路由: POST /api/v1/users/:id/follow (需要JWT认证)
 func FollowUserHandler(c *gin.Context) {

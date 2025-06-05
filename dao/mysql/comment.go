@@ -374,3 +374,38 @@ func BatchUpdateLikeCount(countMap map[int64]int64) error {
 		return nil
 	})
 }
+
+// GetLatestCommentsByAuthorID 获取用户的最新评论列表
+// 使用场景: 个人中心展示用户最新评论
+// JOIN post 表获取帖子标题，JOIN users 表获取作者名（预留）
+// 只查询正常状态的评论（status=1）
+func GetLatestCommentsByAuthorID(authorID int64, limit int) ([]*models.UserCommentItem, error) {
+	var comments []*models.UserCommentItem
+	res := db.Table("comment c").
+		Select("c.comment_id, c.post_id, p.title AS post_title, c.content, c.like_count, c.create_time").
+		Joins("LEFT JOIN post p ON c.post_id = p.post_id").
+		Where("c.author_id = ? AND c.status = 1", authorID).
+		Order("c.create_time DESC").
+		Limit(limit).
+		Scan(&comments)
+	if res.Error != nil {
+		zap.L().Error("get latest comments by author id failed",
+			zap.Int64("author_id", authorID),
+			zap.Error(res.Error))
+		return nil, res.Error
+	}
+	return comments, nil
+}
+
+// CountCommentsByAuthorID 统计用户的评论总数
+// 使用场景: 个人中心展示评论总数
+func CountCommentsByAuthorID(authorID int64) (int64, error) {
+	var count int64
+	res := db.Model(&models.Comment{}).
+		Where("author_id = ? AND status = 1", authorID).
+		Count(&count)
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return count, nil
+}

@@ -22,11 +22,8 @@ import PageShell from "@/components/ui/PageShell";
 import PostCard from "@/components/ui/PostCard";
 import { PostCardSkeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
-import { apiClient, type PostListItem, type PostsResponse, type UserFollowItem, type UserProfile } from "@/lib/api";
+import { apiClient, type PostListItem, type PostsResponse, type UserCommentItem, type UserFollowItem, type UserProfile } from "@/lib/api";
 import { formatCount, formatDateTime, formatShortDate } from "@/lib/format";
-import {
-  previewComments,
-} from "@/lib/user-preview";
 import { cn, getErrorMessage } from "@/lib/utils";
 
 type ProfileListType = "followers" | "following" | null;
@@ -277,6 +274,8 @@ export default function UserManagementPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<PostListItem[]>([]);
+  const [comments, setComments] = useState<UserCommentItem[]>([]);
+  const [commentTotal, setCommentTotal] = useState(0);
   const [error, setError] = useState("");
   const [signatureDraft, setSignatureDraft] = useState("");
   const [savingSignature, setSavingSignature] = useState(false);
@@ -310,10 +309,16 @@ export default function UserManagementPage() {
           order: "desc",
         });
         setPosts(normalizePosts(postsResponse.data));
+
+        const commentsResponse = await apiClient.getUserComments(profileId);
+        setComments(commentsResponse.data.list);
+        setCommentTotal(commentsResponse.data.total);
       } catch (err) {
         setError(getErrorMessage(err, "用户资料加载失败，请稍后再试。"));
         setProfile(null);
         setPosts([]);
+        setComments([]);
+        setCommentTotal(0);
       } finally {
         setLoading(false);
       }
@@ -664,30 +669,45 @@ export default function UserManagementPage() {
 
           <SectionCard
             title="最新评论"
-            extra={<span className="text-sm font-medium text-muted-strong">共 {formatCount(previewComments.length)} 条</span>}
+            extra={<span className="text-sm font-medium text-muted-strong">共 {formatCount(commentTotal)} 条</span>}
           >
             {canViewPrivateBlocks ? (
-              <div className="space-y-3">
-                {previewComments.map((comment) => (
-                  <article key={comment.id} className="rounded-lg border border-border bg-surface-soft px-4 py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-foreground">{comment.postTitle}</p>
-                        <p className="mt-2 text-sm leading-6 text-muted-strong">{comment.excerpt}</p>
+              comments.length > 0 ? (
+                <div className="space-y-3">
+                  {comments.map((comment) => (
+                    <Link
+                      key={comment.comment_id}
+                      href={`/post/${comment.post_id}`}
+                      className="block rounded-lg border border-border bg-surface-soft px-4 py-4 transition hover:border-primary/30 hover:shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground">{comment.post_title || "无标题"}</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-strong line-clamp-2">{comment.content}</p>
+                        </div>
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-muted">
+                          <MessageSquareText className="h-3.5 w-3.5" />
+                          评论
+                        </span>
                       </div>
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-muted">
-                        <MessageSquareText className="h-3.5 w-3.5" />
-                        预览
-                      </span>
-                    </div>
-                    <p className="mt-3 text-xs text-muted">{formatDateTime(comment.createdAt)}</p>
-                  </article>
-                ))}
-
-                <div className="rounded-lg border border-dashed border-border-strong bg-surface px-4 py-4 text-sm leading-6 text-muted">
-                  评论系统接入后，这里会按时间展示你的最新评论，并同步评论总数。
+                      <div className="mt-3 flex items-center gap-3 text-xs text-muted">
+                        <span>{formatDateTime(comment.create_time)}</span>
+                        {comment.like_count > 0 && (
+                          <span className="flex items-center gap-1">
+                            <Heart className="h-3 w-3" />
+                            {formatCount(comment.like_count)}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <EmptyState
+                  title="暂无评论"
+                  description={isSelf ? "去帖子下面发表你的看法吧。" : "该用户还没有发表过评论。"}
+                />
+              )
             ) : (
               <LoginLockedCard title="评论信息已锁定" description="登录后可以查看更多评论活动和个人互动信息。" />
             )}

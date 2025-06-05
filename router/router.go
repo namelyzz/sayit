@@ -23,6 +23,7 @@ func SetupRouter(mode string) *gin.Engine {
 	v1.GET("/post/:id/comments", controller.GetCommentListHandler)   // 帖子评论列表
 	v1.GET("/comment/:id/children", controller.GetCommentChildrenHandler) // 评论的子评论列表
 	v1.GET("/users/:id/posts", controller.GetUserPostsHandler)       // 用户发布的帖子
+	v1.GET("/users/:id/comments", controller.GetUserCommentsHandler) // 用户最新评论
 	v1.GET("/users/:id/followers", controller.GetUserFollowersHandler)
 	v1.GET("/users/:id/following", controller.GetUserFollowingHandler)
 	v1.GET("/users/:id", controller.GetUserProfileHandler) // 用户公开资料

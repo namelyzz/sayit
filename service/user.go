@@ -143,6 +143,32 @@ func GetUserPosts(ctx context.Context, userID int64, p *models.ParamPostList, cu
 	return GetPostListWithViewer(ctx, p, currentUserID)
 }
 
+// GetUserComments 获取用户的最新评论列表
+// 返回用户最新评论，包含帖子标题，用于个人中心展示
+func GetUserComments(ctx context.Context, userID int64, limit int, currentUserID int64) (*models.UserCommentListResponse, error) {
+	// 1. 验证用户存在
+	if _, err := mysql.GetUserProfileByID(userID); err != nil {
+		return nil, err
+	}
+
+	// 2. 获取用户最新评论
+	comments, err := mysql.GetLatestCommentsByAuthorID(userID, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 统计用户评论总数
+	total, err := mysql.CountCommentsByAuthorID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.UserCommentListResponse{
+		List:  comments,
+		Total: total,
+	}, nil
+}
+
 // FollowUser 关注用户。
 func FollowUser(currentUserID, targetUserID int64) error {
 	if currentUserID == targetUserID {
