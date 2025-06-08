@@ -12,33 +12,33 @@ import (
 
 // 常量定义
 const (
-	maxCommentDepth           = 10  // 最大嵌套深度，超过此深度不再返回子评论
-	deletedContent            = "[已删除]" // 已删除评论的占位内容
-	commentLikeScoreMultiplier = 50 // 每个评论点赞的热度分值（帖子投票 432 分/票，评论点赞 50 分/赞，比例约 8.6:1）
-	likeRetryCount            = 1  // MySQL 操作失败时的重试次数
+	maxCommentDepth            = 10      // 最大嵌套深度，超过此深度不再返回子评论
+	deletedContent             = "[已删除]" // 已删除评论的占位内容
+	commentLikeScoreMultiplier = 50      // 每个评论点赞的热度分值（帖子投票 432 分/票，评论点赞 50 分/赞，比例约 8.6:1）
+	likeRetryCount             = 1       // MySQL 操作失败时的重试次数
 )
 
 // mock 变量定义，方便单元测试替换（mock）依赖的函数
 // 使用模式: 测试时替换这些变量，验证业务逻辑正确性，无需真实数据库/Redis
 var (
-	getPostByIDFunc               = mysql.GetPostByID               // 查询帖子
-	getCommentByIDFunc            = mysql.GetCommentByID            // 查询评论
-	createCommentFunc             = mysql.CreateComment             // 创建评论
-	softDeleteCommentFunc         = mysql.SoftDeleteComment         // 软删除评论
-	incrCommentLikeCountFunc      = mysql.IncrCommentLikeCount      // 评论点赞数+1
-	decrCommentLikeCountFunc      = mysql.DecrCommentLikeCount      // 评论点赞数-1
-	getTopLevelCommentsFunc       = mysql.GetTopLevelComments       // 获取顶级评论
-	countTopLevelCommentsFunc     = mysql.CountTopLevelComments     // 统计顶级评论数量
-	countChildCommentsByParentFunc = mysql.CountChildCommentsByParentIDs // 批量统计子评论数量
-	getChildCommentsByParentIDFunc  = mysql.GetChildCommentsByParentID   // 获取单个父评论的子评论（分页）
-	countChildCommentsByParentIDFunc = mysql.CountChildCommentsByParentID // 统计单个父评论的子评论数量
-	getCommentLikeScoreFunc       = mysql.GetCommentLikeScoreByAuthor  // 获取用户评论点赞总分
+	getPostByIDFunc                  = mysql.GetPostByID                   // 查询帖子
+	getCommentByIDFunc               = mysql.GetCommentByID                // 查询评论
+	createCommentFunc                = mysql.CreateComment                 // 创建评论
+	softDeleteCommentFunc            = mysql.SoftDeleteComment             // 软删除评论
+	incrCommentLikeCountFunc         = mysql.IncrCommentLikeCount          // 评论点赞数+1
+	decrCommentLikeCountFunc         = mysql.DecrCommentLikeCount          // 评论点赞数-1
+	getTopLevelCommentsFunc          = mysql.GetTopLevelComments           // 获取顶级评论
+	countTopLevelCommentsFunc        = mysql.CountTopLevelComments         // 统计顶级评论数量
+	countChildCommentsByParentFunc   = mysql.CountChildCommentsByParentIDs // 批量统计子评论数量
+	getChildCommentsByParentIDFunc   = mysql.GetChildCommentsByParentID    // 获取单个父评论的子评论（分页）
+	countChildCommentsByParentIDFunc = mysql.CountChildCommentsByParentID  // 统计单个父评论的子评论数量
+	getCommentLikeScoreFunc          = mysql.GetCommentLikeScoreByAuthor   // 获取用户评论点赞总分
 
-	commentLikeFunc   = redis.CommentLikeComment   // Redis 点赞
-	commentUnlikeFunc = redis.CommentUnlikeComment  // Redis 取消点赞
-	isCommentLikedFunc = redis.IsCommentLikedByUser // Redis 检查点赞
-	incrCommentCountFunc = redis.IncrCommentCount   // Redis 帖子评论数+1
-	decrCommentCountFunc = redis.DecrCommentCount   // Redis 帖子评论数-1
+	commentLikeFunc           = redis.CommentLikeComment    // Redis 点赞
+	commentUnlikeFunc         = redis.CommentUnlikeComment  // Redis 取消点赞
+	isCommentLikedFunc        = redis.IsCommentLikedByUser  // Redis 检查点赞
+	incrCommentCountFunc      = redis.IncrCommentCount      // Redis 帖子评论数+1
+	decrCommentCountFunc      = redis.DecrCommentCount      // Redis 帖子评论数-1
 	checkCommentRateLimitFunc = redis.CheckCommentRateLimit // Redis 评论创建频率限制
 )
 
@@ -93,8 +93,9 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 
 	// 5. 如果是回复评论，验证父评论
 	var rootID int64
+	var parentComment *models.Comment
 	if parentID != 0 {
-		parentComment, err := getCommentByIDFunc(parentID)
+		parentComment, err = getCommentByIDFunc(parentID)
 		if err != nil {
 			zap.L().Error("parent comment not found",
 				zap.Int64("parent_id", parentID),
@@ -141,6 +142,9 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 		zap.L().Error("incr comment count cache failed",
 			zap.Int64("post_id", postID),
 			zap.Error(err))
+	}
+	if parentComment != nil {
+		PublishCommentRepliedNotification(ctx, userID, comment, parentComment)
 	}
 
 	_ = post // 避免未使用变量警告
@@ -392,9 +396,9 @@ func markDeletedContent(details []*models.CommentDetail) {
 // LikeComment 点赞评论的业务逻辑
 //
 // 一致性策略: 幂等设计 + 乐观重试
-//  - Redis 先操作: SADD 记录点赞状态（幂等，已存在返回 0）
-//  - MySQL 后操作: INCR like_count（失败重试 1 次）
-//  - 容错: MySQL 失败时只记日志，不返回错误（Redis 已记录，可后续补偿）
+//   - Redis 先操作: SADD 记录点赞状态（幂等，已存在返回 0）
+//   - MySQL 后操作: INCR like_count（失败重试 1 次）
+//   - 容错: MySQL 失败时只记日志，不返回错误（Redis 已记录，可后续补偿）
 //
 // 返回错误:
 //   - ErrorLikeRepeated: 已点赞过
@@ -422,6 +426,7 @@ func LikeComment(ctx context.Context, userID, commentID int64) error {
 	if !added {
 		return api.ErrorLikeRepeated
 	}
+	PublishCommentLikedNotification(ctx, userID, comment)
 
 	// 5. MySQL INCR like_count（乐观重试）
 	for i := 0; i <= likeRetryCount; i++ {
@@ -442,9 +447,9 @@ func LikeComment(ctx context.Context, userID, commentID int64) error {
 // UnlikeComment 取消点赞评论的业务逻辑
 //
 // 一致性策略: 幂等设计 + 乐观重试
-//  - Redis 先操作: SREM 移除点赞状态（幂等，未点赞返回 0）
-//  - MySQL 后操作: DECR like_count（失败重试 1 次）
-//  - 容错: MySQL 失败时只记日志，不返回错误（Redis 已移除，可后续补偿）
+//   - Redis 先操作: SREM 移除点赞状态（幂等，未点赞返回 0）
+//   - MySQL 后操作: DECR like_count（失败重试 1 次）
+//   - 容错: MySQL 失败时只记日志，不返回错误（Redis 已移除，可后续补偿）
 //
 // 幂等设计:
 //   - 未点赞时调用取消点赞，直接返回成功（不报错）

@@ -33,6 +33,9 @@ func restoreCommentTestHooks() func() {
 	origDecrCommentCount := decrCommentCountFunc
 	origCheckCommentRateLimit := checkCommentRateLimitFunc
 	origGenID := genIDFunc
+	origPublishNotificationEvent := publishNotificationEventFunc
+	origGenNotificationID := genNotificationIDFunc
+	genNotificationIDFunc = func() int64 { return 9999 }
 
 	return func() {
 		getPostByIDFunc = origGetPostByID
@@ -54,6 +57,8 @@ func restoreCommentTestHooks() func() {
 		decrCommentCountFunc = origDecrCommentCount
 		checkCommentRateLimitFunc = origCheckCommentRateLimit
 		genIDFunc = origGenID
+		publishNotificationEventFunc = origPublishNotificationEvent
+		genNotificationIDFunc = origGenNotificationID
 	}
 }
 
@@ -134,6 +139,79 @@ func TestCreateComment_Success_ReplyToTopLevel(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(500), int64(comment.ParentID))
 	assert.Equal(t, int64(500), int64(comment.RootID)) // 根评论ID = 父评论ID
+}
+
+func TestCreateComment_ReplyPublishesNotificationToDirectParent(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	genIDFunc = func() int64 { return 1002 }
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
+	getPostByIDFunc = func(postID int64) (*models.Post, error) {
+		return &models.Post{PostID: 100}, nil
+	}
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{
+			CommentID: 500,
+			PostID:    100,
+			AuthorID:  77,
+			ParentID:  0,
+		}, nil
+	}
+	createCommentFunc = func(c *models.Comment) error { return nil }
+	incrCommentCountFunc = func(ctx context.Context, postID int64) error { return nil }
+
+	var published *models.NotificationEvent
+	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
+		published = event
+		return "1-0", nil
+	}
+
+	_, err := CreateComment(context.Background(), 42, &models.ParamCreateComment{
+		PostID:   "100",
+		ParentID: "500",
+		Content:  "reply",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, published)
+	assert.Equal(t, models.NotificationTypeCommentReplied, published.Type)
+	assert.Equal(t, int64(77), published.RecipientID)
+	assert.Equal(t, int64(42), published.ActorID)
+	assert.Equal(t, int64(100), published.PostID)
+	assert.Equal(t, int64(1002), published.CommentID)
+	assert.Equal(t, int64(500), published.ParentID)
+}
+
+func TestCreateComment_ReplySelfDoesNotPublishNotification(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	genIDFunc = func() int64 { return 1002 }
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
+	getPostByIDFunc = func(postID int64) (*models.Post, error) {
+		return &models.Post{PostID: 100}, nil
+	}
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{CommentID: 500, PostID: 100, AuthorID: 42}, nil
+	}
+	createCommentFunc = func(c *models.Comment) error { return nil }
+	incrCommentCountFunc = func(ctx context.Context, postID int64) error { return nil }
+
+	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
+		t.Fatal("self reply should not publish notification")
+		return "", nil
+	}
+
+	_, err := CreateComment(context.Background(), 42, &models.ParamCreateComment{
+		PostID:   "100",
+		ParentID: "500",
+		Content:  "reply",
+	})
+
+	require.NoError(t, err)
 }
 
 func TestCreateComment_Success_ReplyToNested(t *testing.T) {
@@ -821,6 +899,50 @@ func TestLikeComment_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, incrCalled)
+}
+
+func TestLikeComment_PublishesNotificationForOtherAuthor(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{CommentID: 1001, PostID: 100, AuthorID: 77, Status: 1}, nil
+	}
+	commentLikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) { return true, nil }
+	incrCommentLikeCountFunc = func(commentID int64) error { return nil }
+
+	var published *models.NotificationEvent
+	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
+		published = event
+		return "1-0", nil
+	}
+
+	err := LikeComment(context.Background(), 42, 1001)
+
+	require.NoError(t, err)
+	require.NotNil(t, published)
+	assert.Equal(t, models.NotificationTypeCommentLiked, published.Type)
+	assert.Equal(t, int64(77), published.RecipientID)
+	assert.Equal(t, int64(42), published.ActorID)
+	assert.Equal(t, int64(100), published.PostID)
+	assert.Equal(t, int64(1001), published.CommentID)
+}
+
+func TestLikeComment_SelfLikeDoesNotPublishNotification(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	getCommentByIDFunc = func(commentID int64) (*models.Comment, error) {
+		return &models.Comment{CommentID: 1001, PostID: 100, AuthorID: 42, Status: 1}, nil
+	}
+	commentLikeFunc = func(ctx context.Context, commentID, userID int64) (bool, error) { return true, nil }
+	incrCommentLikeCountFunc = func(commentID int64) error { return nil }
+	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
+		t.Fatal("self like should not publish notification")
+		return "", nil
+	}
+
+	err := LikeComment(context.Background(), 42, 1001)
+
+	require.NoError(t, err)
 }
 
 func TestLikeComment_CommentNotFound(t *testing.T) {

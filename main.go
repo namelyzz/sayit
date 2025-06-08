@@ -36,6 +36,7 @@ func main() {
 	}
 	defer redis.Close()
 	go service.StartOutboxWorker(context.Background())
+	go service.StartNotificationWorker(context.Background())
 	go service.StartLikeCountReconciler(context.Background(), time.Hour)
 
 	if err := snowflake.Init(config.Conf.StartTime, config.Conf.MachineID); err != nil {

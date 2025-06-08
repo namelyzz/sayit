@@ -112,5 +112,30 @@ CREATE TABLE `comment_like` (
                                 `user_id` bigint(20) NOT NULL COMMENT 'user id',
                                 `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
                                 PRIMARY KEY (`comment_id`, `user_id`),
-                                KEY `idx_user_id` (`user_id`)
+                                 KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `notifications`;
+CREATE TABLE `notifications` (
+                                 `id` bigint(20) NOT NULL AUTO_INCREMENT,
+                                 `notification_id` bigint(20) NOT NULL COMMENT 'notification id (snowflake)',
+                                 `recipient_id` bigint(20) NOT NULL COMMENT 'notification receiver user id',
+                                 `actor_id` bigint(20) NOT NULL COMMENT 'action actor user id',
+                                 `type` varchar(32) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'notification type',
+                                 `post_id` bigint(20) DEFAULT NULL COMMENT 'related post id',
+                                 `comment_id` bigint(20) DEFAULT NULL COMMENT 'related comment id',
+                                 `parent_id` bigint(20) DEFAULT NULL COMMENT 'parent comment id',
+                                 `direction` tinyint(4) DEFAULT NULL COMMENT 'vote direction: 1=upvote, -1=downvote',
+                                 `title` varchar(128) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'notification title',
+                                 `content` varchar(512) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'notification content',
+                                 `link` varchar(255) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'frontend link',
+                                 `is_read` tinyint(4) NOT NULL DEFAULT 0 COMMENT '0=unread, 1=read',
+                                 `dedupe_key` varchar(128) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'idempotency key',
+                                 `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+                                 `read_time` timestamp NULL DEFAULT NULL,
+                                 PRIMARY KEY (`id`),
+                                 UNIQUE KEY `uk_notification_id` (`notification_id`),
+                                 UNIQUE KEY `uk_dedupe_key` (`dedupe_key`),
+                                 KEY `idx_recipient_read_time` (`recipient_id`, `is_read`, `create_time`),
+                                 KEY `idx_recipient_time` (`recipient_id`, `create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

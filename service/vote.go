@@ -2,15 +2,24 @@ package service
 
 import (
 	"context"
+	"github.com/namelyzz/sayit/dao/mysql"
 	"github.com/namelyzz/sayit/dao/redis"
 	"github.com/namelyzz/sayit/models"
 	"github.com/namelyzz/sayit/utils/api"
+	"go.uber.org/zap"
 	"math"
 	"strconv"
 )
 
 // 投票系统的分数常量
 const scorePerVote = 432 // 每票的基础分值（已在 dao/redis/vote.go 中定义，此处保留说明）
+
+var (
+	isPostCreatedWithinOneWeekFunc = redis.IsPostCreatedWithinOneWeek
+	getPostVoteScoreFunc           = redis.GetPostVoteScore
+	updatePostVoteFunc             = redis.UpdatePostVote
+	getPostForVoteFunc             = mysql.GetPostByID
+)
 
 // VoteForPost 为帖子投票的核心业务逻辑
 //
@@ -61,7 +70,7 @@ func VoteForPost(ctx context.Context, userID int64, p *models.ParamVote) (err er
 	// ─── Step 1: 投票时间校验 ───
 	// 检查帖子是否在发布 7 天内，超过 7 天不允许投票
 	// 原理: 从 Redis 时间排行榜获取帖子创建时间，与当前时间比较
-	if !redis.IsPostCreatedWithinOneWeek(ctx, postID) {
+	if !isPostCreatedWithinOneWeekFunc(ctx, postID) {
 		return api.ErrorVoteTimeExpire
 	}
 
@@ -73,7 +82,7 @@ func VoteForPost(ctx context.Context, userID int64, p *models.ParamVote) (err er
 
 	// 查询用户之前对该帖子的投票记录
 	// 如果没投过票，返回 0（Redis ZScore 对不存在的 key 返回 0）
-	curVote := redis.GetPostVoteScore(ctx, postID, userIDStr)
+	curVote := getPostVoteScoreFunc(ctx, postID, userIDStr)
 
 	// ─── Step 3: 重复投票校验 ───
 	// 如果新票值与旧票值相同，说明是重复操作，拒绝处理
@@ -95,5 +104,20 @@ func VoteForPost(ctx context.Context, userID int64, p *models.ParamVote) (err er
 
 	// ─── Step 5: 更新 Redis ───
 	// 在同一个 Redis 事务管道中同时更新帖子分数和投票记录
-	return redis.UpdatePostVote(ctx, userIDStr, postID, newVote, float64(operate), diff)
+	if err := updatePostVoteFunc(ctx, userIDStr, postID, newVote, float64(operate), diff); err != nil {
+		return err
+	}
+	if curVote == 0 && newVote != 0 {
+		postIDInt, parseErr := strconv.ParseInt(postID, 10, 64)
+		if parseErr != nil {
+			return api.ErrorInvalidID
+		}
+		post, err := getPostForVoteFunc(postIDInt)
+		if err != nil {
+			zap.L().Warn("get post for vote notification failed", zap.String("postID", postID), zap.Error(err))
+			return nil
+		}
+		PublishPostVotedNotification(ctx, userID, post, p.Direction)
+	}
+	return nil
 }

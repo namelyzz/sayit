@@ -181,6 +181,7 @@ func FollowUser(currentUserID, targetUserID int64) error {
 		return err
 	}
 	_ = redis.FollowUserCache(context.Background(), currentUserID, targetUserID)
+	PublishUserFollowedNotification(context.Background(), currentUserID, targetUserID)
 	return nil
 }
 

@@ -14,16 +14,16 @@ func SetupRouter(mode string) *gin.Engine {
 	v1 := r.Group("/api/v1")
 
 	// 公开接口（无需 JWT 验证）
-	v1.GET("/hot_communities", controller.HotCommunityHandler)       // 热门社区列表
-	v1.GET("/random_communities", controller.RandomCommunityHandler) // 随机推荐社区
-	v1.GET("/community", controller.CommunityHandler)                // 社区列表
-	v1.GET("/community/:id", controller.CommunityDetailHandler)      // 社区详情
-	v1.GET("/posts", controller.GetPostListHandler)                  // 帖子列表
-	v1.GET("/post_detail/:id", controller.GetPostDetailHandler)      // 帖子详情
-	v1.GET("/post/:id/comments", controller.GetCommentListHandler)   // 帖子评论列表
+	v1.GET("/hot_communities", controller.HotCommunityHandler)            // 热门社区列表
+	v1.GET("/random_communities", controller.RandomCommunityHandler)      // 随机推荐社区
+	v1.GET("/community", controller.CommunityHandler)                     // 社区列表
+	v1.GET("/community/:id", controller.CommunityDetailHandler)           // 社区详情
+	v1.GET("/posts", controller.GetPostListHandler)                       // 帖子列表
+	v1.GET("/post_detail/:id", controller.GetPostDetailHandler)           // 帖子详情
+	v1.GET("/post/:id/comments", controller.GetCommentListHandler)        // 帖子评论列表
 	v1.GET("/comment/:id/children", controller.GetCommentChildrenHandler) // 评论的子评论列表
-	v1.GET("/users/:id/posts", controller.GetUserPostsHandler)       // 用户发布的帖子
-	v1.GET("/users/:id/comments", controller.GetUserCommentsHandler) // 用户最新评论
+	v1.GET("/users/:id/posts", controller.GetUserPostsHandler)            // 用户发布的帖子
+	v1.GET("/users/:id/comments", controller.GetUserCommentsHandler)      // 用户最新评论
 	v1.GET("/users/:id/followers", controller.GetUserFollowersHandler)
 	v1.GET("/users/:id/following", controller.GetUserFollowingHandler)
 	v1.GET("/users/:id", controller.GetUserProfileHandler) // 用户公开资料
@@ -37,6 +37,10 @@ func SetupRouter(mode string) *gin.Engine {
 	{
 		v1.GET("/me", controller.GetMeHandler)
 		v1.PATCH("/me", controller.UpdateMeHandler)
+		v1.GET("/notifications/unread_count", controller.GetNotificationUnreadCountHandler)
+		v1.GET("/notifications", controller.GetNotificationListHandler)
+		v1.POST("/notifications/:id/read", controller.MarkNotificationReadHandler)
+		v1.POST("/notifications/read_all", controller.MarkAllNotificationsReadHandler)
 		v1.POST("/users/:id/follow", controller.FollowUserHandler)
 		v1.DELETE("/users/:id/follow", controller.UnfollowUserHandler)
 		v1.GET("/users/:id/follow_status", controller.GetUserFollowStatusHandler)
