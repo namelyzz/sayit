@@ -1,10 +1,12 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, ChevronRight, Compass, Home, LogIn, LogOut, PenLine, Search } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Button from "@/components/ui/Button";
+import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const mobileLinks = [
@@ -16,7 +18,36 @@ const mobileLinks = [
 export default function Navbar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
   const avatarText = user?.user_name?.slice(0, 1).toUpperCase() || "S";
+  const unreadLabel = unreadCount > 99 ? "99+" : String(unreadCount);
+
+  const refreshUnreadCount = useCallback(async () => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+    try {
+      const response = await apiClient.getNotificationUnreadCount();
+      setUnreadCount(response.data.count || 0);
+    } catch {
+      setUnreadCount(0);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshUnreadCount();
+    if (!user) return;
+
+    const interval = window.setInterval(refreshUnreadCount, 45000);
+    const handleFocus = () => refreshUnreadCount();
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [refreshUnreadCount, user]);
 
   return (
     <>
@@ -49,14 +80,21 @@ export default function Navbar() {
           </form>
 
           <div className="flex shrink-0 items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hidden text-slate-800 hover:bg-white/35 md:inline-flex"
-              aria-label="通知"
-            >
-              <Bell className="h-5 w-5" />
-            </Button>
+            {user ? (
+              <Link
+                href="/notifications"
+                className="relative hidden h-10 w-10 items-center justify-center rounded-lg text-slate-800 transition hover:bg-white/35 md:inline-flex"
+                aria-label={unreadCount > 0 ? `通知，${unreadCount} 条未读` : "通知"}
+                title="通知"
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-danger px-1.5 py-0.5 text-center text-[10px] font-bold leading-4 text-white shadow-sm ring-2 ring-white/80">
+                    {unreadLabel}
+                  </span>
+                ) : null}
+              </Link>
+            ) : null}
 
             <Link
               href="/submit"

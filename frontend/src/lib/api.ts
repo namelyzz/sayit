@@ -135,6 +135,36 @@ export interface UserCommentListResponse {
   total: number;
 }
 
+export type NotificationType = "comment_liked" | "post_voted" | "comment_replied" | "user_followed";
+
+export interface NotificationItem {
+  notification_id: string;
+  recipient_id: string;
+  actor_id: string;
+  actor_name: string;
+  type: NotificationType;
+  post_id?: string;
+  comment_id?: string;
+  parent_id?: string;
+  direction?: number;
+  title: string;
+  content: string;
+  link: string;
+  is_read: boolean;
+  create_time: string;
+  read_time?: string;
+}
+
+export interface NotificationListResponse {
+  list: NotificationItem[];
+  total: number;
+  unread_count: number;
+}
+
+export interface NotificationUnreadCountResponse {
+  count: number;
+}
+
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
@@ -417,6 +447,33 @@ class ApiClient {
   async unlikeComment(commentId: string) {
     return this.request(`/comment/${commentId}/like`, {
       method: "DELETE",
+    });
+  }
+
+  // ========== 通知相关 API ==========
+
+  async getNotificationUnreadCount() {
+    return this.request<NotificationUnreadCountResponse>("/notifications/unread_count");
+  }
+
+  async getNotifications(params?: { page?: number; size?: number; status?: "all" | "unread" }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set("page", params.page.toString());
+    if (params?.size) searchParams.set("size", params.size.toString());
+    if (params?.status) searchParams.set("status", params.status);
+    const query = searchParams.toString();
+    return this.request<NotificationListResponse>(`/notifications${query ? `?${query}` : ""}`);
+  }
+
+  async markNotificationRead(id: string) {
+    return this.request(`/notifications/${id}/read`, {
+      method: "POST",
+    });
+  }
+
+  async markAllNotificationsRead() {
+    return this.request("/notifications/read_all", {
+      method: "POST",
     });
   }
 }

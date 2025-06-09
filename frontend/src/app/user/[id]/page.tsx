@@ -311,8 +311,8 @@ export default function UserManagementPage() {
         setPosts(normalizePosts(postsResponse.data));
 
         const commentsResponse = await apiClient.getUserComments(profileId);
-        setComments(commentsResponse.data.list);
-        setCommentTotal(commentsResponse.data.total);
+        setComments(commentsResponse.data.list ?? []);
+        setCommentTotal(commentsResponse.data.total ?? 0);
       } catch (err) {
         setError(getErrorMessage(err, "用户资料加载失败，请稍后再试。"));
         setProfile(null);

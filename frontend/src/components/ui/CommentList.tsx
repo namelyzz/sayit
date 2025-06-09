@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MessageSquare, ArrowUpDown } from "lucide-react";
+import { ArrowUpDown } from "lucide-react";
 import { apiClient, type CommentDetail } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils";
 import { Skeleton } from "./Skeleton";
@@ -18,7 +18,6 @@ interface CommentListProps {
 export default function CommentList({ postId, currentUserId, postAuthorId }: CommentListProps) {
   const [comments, setComments] = useState<CommentDetail[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
@@ -66,18 +65,14 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
   }, [postId, order]);
 
   useEffect(() => {
-    setPage(1);
     fetchComments(1);
   }, [fetchComments]);
 
   const handleLoadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
-    setPage((prev) => {
-      const nextPage = prev + 1;
-      fetchComments(nextPage, true);
-      return nextPage;
-    });
-  }, [loadingMore, hasMore, fetchComments]);
+    const loadedPages = Math.ceil(comments.length / pageSize);
+    fetchComments(loadedPages + 1, true);
+  }, [comments.length, loadingMore, hasMore, fetchComments]);
 
   // IntersectionObserver 实现无限滚动
   useEffect(() => {
@@ -99,19 +94,16 @@ export default function CommentList({ postId, currentUserId, postAuthorId }: Com
 
   const handleCreateComment = async (content: string) => {
     await apiClient.createComment(postId, content);
-    setPage(1);
     fetchComments(1);
   };
 
   const handleReply = async (parentId: string, content: string) => {
     await apiClient.createComment(postId, content, parentId);
-    setPage(1);
     fetchComments(1);
   };
 
   const handleDelete = async (commentId: string) => {
     await apiClient.deleteComment(commentId);
-    setPage(1);
     fetchComments(1);
   };
 
