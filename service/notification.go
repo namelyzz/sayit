@@ -19,6 +19,7 @@ const (
 	notificationWorkerBatchSize = 50
 	notificationWorkerBlock     = 5 * time.Second
 	notificationWorkerIdleSleep = time.Second
+	notificationCooldownTTL     = 12 * time.Hour
 )
 
 var (
@@ -30,6 +31,7 @@ var (
 	setNotificationUnreadFunc           = redis.SetNotificationUnread
 	decrNotificationUnreadFunc          = redis.DecrNotificationUnread
 	publishNotificationEventFunc        = redis.PublishNotificationEvent
+	acquireNotificationCooldownFunc     = redis.AcquireNotificationCooldown
 
 	createNotificationFunc       = mysql.CreateNotification
 	listNotificationsFunc        = mysql.ListNotifications
@@ -127,6 +129,18 @@ func newNotificationEvent(eventType string, recipientID, actorID, postID, commen
 }
 
 func publishNotification(ctx context.Context, event *models.NotificationEvent) {
+	allowed, err := acquireNotificationCooldownFunc(ctx, notificationCooldownScope(event), notificationCooldownTTL)
+	if err != nil {
+		zap.L().Warn("acquire notification cooldown failed",
+			zap.String("type", event.Type),
+			zap.Int64("recipientID", event.RecipientID),
+			zap.Int64("actorID", event.ActorID),
+			zap.String("dedupeKey", event.DedupeKey),
+			zap.Error(err))
+	} else if !allowed {
+		return
+	}
+
 	if _, err := publishNotificationEventFunc(ctx, event); err != nil {
 		zap.L().Warn("publish notification event failed",
 			zap.String("type", event.Type),
@@ -135,6 +149,28 @@ func publishNotification(ctx context.Context, event *models.NotificationEvent) {
 			zap.String("dedupeKey", event.DedupeKey),
 			zap.Error(err))
 	}
+}
+
+func notificationCooldownScope(event *models.NotificationEvent) string {
+	return fmt.Sprintf("%s:%d:%d:%s", event.Type, event.ActorID, event.RecipientID, notificationTargetScope(event))
+}
+
+func notificationTargetScope(event *models.NotificationEvent) string {
+	switch event.Type {
+	case models.NotificationTypeCommentLiked, models.NotificationTypeCommentReplied:
+		if event.CommentID != 0 {
+			return fmt.Sprintf("comment:%d", event.CommentID)
+		}
+	case models.NotificationTypePostVoted:
+		if event.PostID != 0 {
+			return fmt.Sprintf("post:%d", event.PostID)
+		}
+	case models.NotificationTypeUserFollowed:
+		if event.RecipientID != 0 {
+			return fmt.Sprintf("user:%d", event.RecipientID)
+		}
+	}
+	return "unknown"
 }
 
 // StartNotificationWorker 启动通知消费 worker。

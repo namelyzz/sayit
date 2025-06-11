@@ -35,7 +35,11 @@ func restoreCommentTestHooks() func() {
 	origGenID := genIDFunc
 	origPublishNotificationEvent := publishNotificationEventFunc
 	origGenNotificationID := genNotificationIDFunc
+	origAcquireNotificationCooldown := acquireNotificationCooldownFunc
 	genNotificationIDFunc = func() int64 { return 9999 }
+	acquireNotificationCooldownFunc = func(ctx context.Context, scope string, ttl time.Duration) (bool, error) {
+		return true, nil
+	}
 
 	return func() {
 		getPostByIDFunc = origGetPostByID
@@ -59,6 +63,7 @@ func restoreCommentTestHooks() func() {
 		genIDFunc = origGenID
 		publishNotificationEventFunc = origPublishNotificationEvent
 		genNotificationIDFunc = origGenNotificationID
+		acquireNotificationCooldownFunc = origAcquireNotificationCooldown
 	}
 }
 

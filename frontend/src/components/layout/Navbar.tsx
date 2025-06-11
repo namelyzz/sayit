@@ -9,6 +9,8 @@ import Button from "@/components/ui/Button";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+const notificationUnreadChangedEvent = "notification-unread-changed";
+
 const mobileLinks = [
   { href: "/", label: "首页", icon: Home },
   { href: "/submit", label: "发布", icon: PenLine },
@@ -41,11 +43,21 @@ export default function Navbar() {
 
     const interval = window.setInterval(refreshUnreadCount, 45000);
     const handleFocus = () => refreshUnreadCount();
+    const handleUnreadChanged = (event: Event) => {
+      const detail = (event as CustomEvent<number>).detail;
+      if (typeof detail === "number") {
+        setUnreadCount(Math.max(0, detail));
+        return;
+      }
+      refreshUnreadCount();
+    };
     window.addEventListener("focus", handleFocus);
+    window.addEventListener(notificationUnreadChangedEvent, handleUnreadChanged);
 
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener(notificationUnreadChangedEvent, handleUnreadChanged);
     };
   }, [refreshUnreadCount, user]);
 

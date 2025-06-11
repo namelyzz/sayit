@@ -28,6 +28,7 @@ const (
 	KeyRateLimitCommentPF   = "ratelimit:comment:"   // Sorted Set前缀: 评论创建频率限制，sayit:ratelimit:comment:<userID>
 	KeyNotificationStream   = "notification:stream"  // Stream: 通知事件队列，sayit:notification:stream
 	KeyNotificationUnreadPF = "notification:unread:" // String前缀: 用户未读通知数，sayit:notification:unread:<userID>
+	KeyNotificationCooldown = "notification:cooldown:" // String前缀: 通知冷却门禁，sayit:notification:cooldown:<type>:<actor>:<recipient>:<target>
 )
 
 func Init(cfg *config.RedisConfig) (err error) {

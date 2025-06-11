@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/namelyzz/sayit/models"
 	goredis "github.com/redis/go-redis/v9"
@@ -183,6 +184,79 @@ func TestPublishPostVotedNotification_SelfSkipped(t *testing.T) {
 	}
 
 	PublishPostVotedNotification(context.Background(), 42, &models.Post{PostID: 100, AuthorID: 42}, 1)
+}
+
+func TestNotificationCooldownScope(t *testing.T) {
+	tests := []struct {
+		name  string
+		event *models.NotificationEvent
+		want  string
+	}{
+		{
+			name:  "follow",
+			event: &models.NotificationEvent{Type: models.NotificationTypeUserFollowed, ActorID: 42, RecipientID: 77},
+			want:  "user_followed:42:77:user:77",
+		},
+		{
+			name:  "comment liked",
+			event: &models.NotificationEvent{Type: models.NotificationTypeCommentLiked, ActorID: 42, RecipientID: 77, CommentID: 1001},
+			want:  "comment_liked:42:77:comment:1001",
+		},
+		{
+			name:  "comment replied",
+			event: &models.NotificationEvent{Type: models.NotificationTypeCommentReplied, ActorID: 42, RecipientID: 77, CommentID: 1002},
+			want:  "comment_replied:42:77:comment:1002",
+		},
+		{
+			name:  "post voted",
+			event: &models.NotificationEvent{Type: models.NotificationTypePostVoted, ActorID: 42, RecipientID: 77, PostID: 2001},
+			want:  "post_voted:42:77:post:2001",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, notificationCooldownScope(tt.event))
+		})
+	}
+}
+
+func TestPublishNotification_CooldownHitSkipsPublish(t *testing.T) {
+	restore := mockNotificationDeps()
+	defer restore()
+
+	published := false
+	acquireNotificationCooldownFunc = func(ctx context.Context, scope string, ttl time.Duration) (bool, error) {
+		assert.Equal(t, notificationCooldownTTL, ttl)
+		assert.Equal(t, "user_followed:42:77:user:77", scope)
+		return false, nil
+	}
+	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
+		published = true
+		return "1-0", nil
+	}
+
+	PublishUserFollowedNotification(context.Background(), 42, 77)
+
+	assert.False(t, published)
+}
+
+func TestPublishNotification_CooldownErrorFallsBackToPublish(t *testing.T) {
+	restore := mockNotificationDeps()
+	defer restore()
+
+	published := false
+	acquireNotificationCooldownFunc = func(ctx context.Context, scope string, ttl time.Duration) (bool, error) {
+		return false, errors.New("redis down")
+	}
+	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
+		published = true
+		return "1-0", nil
+	}
+
+	PublishUserFollowedNotification(context.Background(), 42, 77)
+
+	assert.True(t, published)
 }
 
 func TestProcessNotificationMessage_CreatedIncrementsUnreadAndAck(t *testing.T) {
@@ -418,6 +492,7 @@ func mockNotificationDeps() func() {
 	origGet := getNotificationUnreadFunc
 	origSet := setNotificationUnreadFunc
 	origDecr := decrNotificationUnreadFunc
+	origAcquire := acquireNotificationCooldownFunc
 	origCreate := createNotificationFunc
 	origPublish := publishNotificationEventFunc
 	origList := listNotificationsFunc
@@ -427,6 +502,9 @@ func mockNotificationDeps() func() {
 	origGenID := genNotificationIDFunc
 
 	genNotificationIDFunc = func() int64 { return 9999 }
+	acquireNotificationCooldownFunc = func(ctx context.Context, scope string, ttl time.Duration) (bool, error) {
+		return true, nil
+	}
 
 	return func() {
 		ensureNotificationConsumerGroupFunc = origEnsure
@@ -436,6 +514,7 @@ func mockNotificationDeps() func() {
 		getNotificationUnreadFunc = origGet
 		setNotificationUnreadFunc = origSet
 		decrNotificationUnreadFunc = origDecr
+		acquireNotificationCooldownFunc = origAcquire
 		createNotificationFunc = origCreate
 		publishNotificationEventFunc = origPublish
 		listNotificationsFunc = origList

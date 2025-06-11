@@ -16,6 +16,7 @@ import { cn, getErrorMessage } from "@/lib/utils";
 type NotificationStatus = "all" | "unread";
 
 const PAGE_SIZE = 20;
+const notificationUnreadChangedEvent = "notification-unread-changed";
 
 function notificationIcon(item: NotificationItem) {
   switch (item.type) {
@@ -50,6 +51,11 @@ function iconTone(item: NotificationItem) {
 function normalizeLink(link: string) {
   if (!link) return "/notifications";
   return link.startsWith("/") ? link : `/${link}`;
+}
+
+function emitUnreadCount(count: number) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<number>(notificationUnreadChangedEvent, { detail: Math.max(0, count) }));
 }
 
 export default function NotificationsPage() {
@@ -90,7 +96,9 @@ export default function NotificationsPage() {
           return [...current, ...nextList.filter((item) => !existing.has(item.notification_id))];
         });
         setTotal(response.data.total || 0);
-        setUnreadCount(response.data.unread_count || 0);
+        const nextUnreadCount = response.data.unread_count || 0;
+        setUnreadCount(nextUnreadCount);
+        emitUnreadCount(nextUnreadCount);
       } catch (err) {
         if (cancelled) return;
         setError(getErrorMessage(err, "通知加载失败，请稍后重试。"));
@@ -122,6 +130,7 @@ export default function NotificationsPage() {
     try {
       await apiClient.markAllNotificationsRead();
       setUnreadCount(0);
+      emitUnreadCount(0);
       setNotifications((items) => items.map((item) => ({ ...item, is_read: true })));
       if (status === "unread") {
         setNotifications([]);
@@ -140,7 +149,11 @@ export default function NotificationsPage() {
     try {
       if (!item.is_read) {
         await apiClient.markNotificationRead(item.notification_id);
-        setUnreadCount((value) => Math.max(0, value - 1));
+        setUnreadCount((value) => {
+          const nextValue = Math.max(0, value - 1);
+          emitUnreadCount(nextValue);
+          return nextValue;
+        });
         setNotifications((items) => items.map((current) => (current.notification_id === item.notification_id ? { ...current, is_read: true } : current)));
       }
       router.push(normalizeLink(item.link));

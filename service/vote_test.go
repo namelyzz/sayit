@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/namelyzz/sayit/models"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +17,11 @@ func restoreVoteTestHooks() func() {
 	origGetPost := getPostForVoteFunc
 	origPublish := publishNotificationEventFunc
 	origGenNotificationID := genNotificationIDFunc
+	origAcquireNotificationCooldown := acquireNotificationCooldownFunc
 	genNotificationIDFunc = func() int64 { return 9999 }
+	acquireNotificationCooldownFunc = func(ctx context.Context, scope string, ttl time.Duration) (bool, error) {
+		return true, nil
+	}
 
 	return func() {
 		isPostCreatedWithinOneWeekFunc = origIsWithinOneWeek
@@ -25,6 +30,7 @@ func restoreVoteTestHooks() func() {
 		getPostForVoteFunc = origGetPost
 		publishNotificationEventFunc = origPublish
 		genNotificationIDFunc = origGenNotificationID
+		acquireNotificationCooldownFunc = origAcquireNotificationCooldown
 	}
 }
 

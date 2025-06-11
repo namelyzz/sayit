@@ -23,6 +23,10 @@ func notificationUnreadKey(userID int64) string {
 	return getRedisKey(KeyNotificationUnreadPF + strconv.FormatInt(userID, 10))
 }
 
+func notificationCooldownKey(scope string) string {
+	return getRedisKey(KeyNotificationCooldown + scope)
+}
+
 // PublishNotificationEvent 将通知事件写入 Redis Stream。
 func PublishNotificationEvent(ctx context.Context, event *models.NotificationEvent) (string, error) {
 	return client.XAdd(ctx, &goredis.XAddArgs{
@@ -96,6 +100,15 @@ func DecrNotificationUnread(ctx context.Context, userID, count int64) error {
 		return nil
 	}
 	return err
+}
+
+// AcquireNotificationCooldown 尝试获取通知冷却门禁。
+// 返回 true 表示本次允许发送通知；false 表示命中冷却窗口，应跳过通知。
+func AcquireNotificationCooldown(ctx context.Context, scope string, ttl time.Duration) (bool, error) {
+	if scope == "" || ttl <= 0 {
+		return true, nil
+	}
+	return client.SetNX(ctx, notificationCooldownKey(scope), 1, ttl).Result()
 }
 
 var decrNotificationUnreadScript = goredis.NewScript(`
