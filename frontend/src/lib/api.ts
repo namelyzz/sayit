@@ -135,7 +135,7 @@ export interface UserCommentListResponse {
   total: number;
 }
 
-export type NotificationType = "comment_liked" | "post_voted" | "comment_replied" | "user_followed";
+export type NotificationType = "comment_liked" | "post_commented" | "post_voted" | "comment_replied" | "user_followed";
 
 export interface NotificationItem {
   notification_id: string;

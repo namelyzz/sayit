@@ -4,6 +4,7 @@ import "time"
 
 const (
 	NotificationTypeCommentLiked   = "comment_liked"
+	NotificationTypePostCommented  = "post_commented"
 	NotificationTypePostVoted      = "post_voted"
 	NotificationTypeCommentReplied = "comment_replied"
 	NotificationTypeUserFollowed   = "user_followed"

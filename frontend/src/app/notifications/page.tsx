@@ -22,6 +22,8 @@ function notificationIcon(item: NotificationItem) {
   switch (item.type) {
     case "comment_liked":
       return <Heart className="h-4 w-4" />;
+    case "post_commented":
+      return <MessageSquareReply className="h-4 w-4" />;
     case "post_voted":
       return item.direction && item.direction < 0 ? <ThumbsDown className="h-4 w-4" /> : <ThumbsUp className="h-4 w-4" />;
     case "comment_replied":
@@ -37,6 +39,8 @@ function iconTone(item: NotificationItem) {
   switch (item.type) {
     case "comment_liked":
       return "bg-rose-50 text-rose-600 ring-rose-100";
+    case "post_commented":
+      return "bg-amber-50 text-amber-600 ring-amber-100";
     case "post_voted":
       return item.direction && item.direction < 0 ? "bg-red-50 text-danger ring-red-100" : "bg-sky-50 text-primary ring-sky-100";
     case "comment_replied":

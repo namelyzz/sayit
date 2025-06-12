@@ -26,7 +26,7 @@ var (
 // ═══════════════════════════════════════════════════════════════════════════════
 // 投票数轴模型:
 //
-//    -1 (反对) ◄──────── 0 (无票) ────────► 1 (赞成)
+//	-1 (反对) ◄──────── 0 (无票) ────────► 1 (赞成)
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -107,7 +107,7 @@ func VoteForPost(ctx context.Context, userID int64, p *models.ParamVote) (err er
 	if err := updatePostVoteFunc(ctx, userIDStr, postID, newVote, float64(operate), diff); err != nil {
 		return err
 	}
-	if curVote == 0 && newVote != 0 {
+	if newVote != 0 {
 		postIDInt, parseErr := strconv.ParseInt(postID, 10, 64)
 		if parseErr != nil {
 			return api.ErrorInvalidID

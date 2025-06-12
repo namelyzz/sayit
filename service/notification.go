@@ -54,7 +54,6 @@ func PublishCommentLikedNotification(ctx context.Context, actorID int64, comment
 		int64(comment.CommentID),
 		0,
 		0,
-		fmt.Sprintf("comment_liked:%d:%d", comment.CommentID, actorID),
 	)
 	publishNotification(ctx, event)
 }
@@ -72,7 +71,23 @@ func PublishCommentRepliedNotification(ctx context.Context, actorID int64, comme
 		int64(comment.CommentID),
 		int64(parent.CommentID),
 		0,
-		fmt.Sprintf("comment_replied:%d", comment.CommentID),
+	)
+	publishNotification(ctx, event)
+}
+
+// PublishPostCommentedNotification 发布帖子被评论通知。
+func PublishPostCommentedNotification(ctx context.Context, actorID int64, post *models.Post, comment *models.Comment) {
+	if post == nil || comment == nil || int64(post.AuthorID) == 0 || actorID == int64(post.AuthorID) {
+		return
+	}
+	event := newNotificationEvent(
+		models.NotificationTypePostCommented,
+		int64(post.AuthorID),
+		actorID,
+		int64(post.PostID),
+		int64(comment.CommentID),
+		0,
+		0,
 	)
 	publishNotification(ctx, event)
 }
@@ -90,7 +105,6 @@ func PublishPostVotedNotification(ctx context.Context, actorID int64, post *mode
 		0,
 		0,
 		direction,
-		fmt.Sprintf("post_voted:%d:%d", post.PostID, actorID),
 	)
 	publishNotification(ctx, event)
 }
@@ -108,14 +122,14 @@ func PublishUserFollowedNotification(ctx context.Context, actorID, recipientID i
 		0,
 		0,
 		0,
-		fmt.Sprintf("user_followed:%d:%d", recipientID, actorID),
 	)
 	publishNotification(ctx, event)
 }
 
-func newNotificationEvent(eventType string, recipientID, actorID, postID, commentID, parentID int64, direction int8, dedupeKey string) *models.NotificationEvent {
+func newNotificationEvent(eventType string, recipientID, actorID, postID, commentID, parentID int64, direction int8) *models.NotificationEvent {
+	eventID := genNotificationIDFunc()
 	return &models.NotificationEvent{
-		EventID:     genNotificationIDFunc(),
+		EventID:     eventID,
 		Type:        eventType,
 		RecipientID: recipientID,
 		ActorID:     actorID,
@@ -124,7 +138,7 @@ func newNotificationEvent(eventType string, recipientID, actorID, postID, commen
 		ParentID:    parentID,
 		Direction:   direction,
 		CreatedAt:   nowFunc().Unix(),
-		DedupeKey:   dedupeKey,
+		DedupeKey:   fmt.Sprintf("%s:%d", eventType, eventID),
 	}
 }
 
@@ -157,13 +171,13 @@ func notificationCooldownScope(event *models.NotificationEvent) string {
 
 func notificationTargetScope(event *models.NotificationEvent) string {
 	switch event.Type {
-	case models.NotificationTypeCommentLiked, models.NotificationTypeCommentReplied:
+	case models.NotificationTypeCommentLiked, models.NotificationTypeCommentReplied, models.NotificationTypePostCommented:
 		if event.CommentID != 0 {
 			return fmt.Sprintf("comment:%d", event.CommentID)
 		}
 	case models.NotificationTypePostVoted:
 		if event.PostID != 0 {
-			return fmt.Sprintf("post:%d", event.PostID)
+			return fmt.Sprintf("post:%d:direction:%d", event.PostID, event.Direction)
 		}
 	case models.NotificationTypeUserFollowed:
 		if event.RecipientID != 0 {
@@ -370,6 +384,8 @@ func notificationPresentation(event *models.NotificationEvent) (string, string, 
 	switch event.Type {
 	case models.NotificationTypeCommentLiked:
 		return "有人点赞了你的评论", "点击查看评论", fmt.Sprintf("/post/%d?comment=%d", event.PostID, event.CommentID), nil
+	case models.NotificationTypePostCommented:
+		return "有人评论了你的帖子", "点击查看评论", fmt.Sprintf("/post/%d?comment=%d", event.PostID, event.CommentID), nil
 	case models.NotificationTypePostVoted:
 		if event.Direction > 0 {
 			return "有人赞成了你的帖子", "点击查看帖子", fmt.Sprintf("/post/%d", event.PostID), nil

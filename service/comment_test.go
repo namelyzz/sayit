@@ -106,6 +106,64 @@ func TestCreateComment_Success_TopLevel(t *testing.T) {
 	assert.Equal(t, comment, createdComment)
 }
 
+func TestCreateComment_TopLevelPublishesNotificationToPostAuthor(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	genIDFunc = func() int64 { return 1001 }
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
+	getPostByIDFunc = func(postID int64) (*models.Post, error) {
+		return &models.Post{PostID: 100, AuthorID: 77}, nil
+	}
+	createCommentFunc = func(c *models.Comment) error { return nil }
+	incrCommentCountFunc = func(ctx context.Context, postID int64) error { return nil }
+
+	var published *models.NotificationEvent
+	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
+		published = event
+		return "1-0", nil
+	}
+
+	_, err := CreateComment(context.Background(), 42, &models.ParamCreateComment{
+		PostID:  "100",
+		Content: "hello world",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, published)
+	assert.Equal(t, models.NotificationTypePostCommented, published.Type)
+	assert.Equal(t, int64(77), published.RecipientID)
+	assert.Equal(t, int64(42), published.ActorID)
+	assert.Equal(t, int64(100), published.PostID)
+	assert.Equal(t, int64(1001), published.CommentID)
+}
+
+func TestCreateComment_TopLevelSelfPostDoesNotPublishNotification(t *testing.T) {
+	defer restoreCommentTestHooks()()
+
+	genIDFunc = func() int64 { return 1001 }
+	checkCommentRateLimitFunc = func(ctx context.Context, userID int64) (bool, time.Duration, error) {
+		return true, 0, nil
+	}
+	getPostByIDFunc = func(postID int64) (*models.Post, error) {
+		return &models.Post{PostID: 100, AuthorID: 42}, nil
+	}
+	createCommentFunc = func(c *models.Comment) error { return nil }
+	incrCommentCountFunc = func(ctx context.Context, postID int64) error { return nil }
+	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
+		t.Fatal("self post comment should not publish notification")
+		return "", nil
+	}
+
+	_, err := CreateComment(context.Background(), 42, &models.ParamCreateComment{
+		PostID:  "100",
+		Content: "hello world",
+	})
+
+	require.NoError(t, err)
+}
+
 func TestCreateComment_Success_ReplyToTopLevel(t *testing.T) {
 	defer restoreCommentTestHooks()()
 

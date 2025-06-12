@@ -86,24 +86,27 @@ func TestVoteForPost_CancelDoesNotPublishNotification(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestVoteForPost_ChangeVoteDoesNotPublishNotification(t *testing.T) {
+func TestVoteForPost_ChangeVotePublishesNotification(t *testing.T) {
 	defer restoreVoteTestHooks()()
 
 	isPostCreatedWithinOneWeekFunc = func(ctx context.Context, postID string) bool { return true }
 	getPostVoteScoreFunc = func(ctx context.Context, postID, userID string) float64 { return -1 }
 	updatePostVoteFunc = func(ctx context.Context, userID, postID string, voteVal, operate, diff float64) error { return nil }
 	getPostForVoteFunc = func(postID int64) (*models.Post, error) {
-		t.Fatal("changed vote should not fetch post for notification")
-		return nil, nil
+		return &models.Post{PostID: models.SnowflakeID(postID), AuthorID: 77}, nil
 	}
+	var published *models.NotificationEvent
 	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
-		t.Fatal("changed vote should not publish notification")
-		return "", nil
+		published = event
+		return "1-0", nil
 	}
 
 	err := VoteForPost(context.Background(), 42, &models.ParamVote{PostID: "100", Direction: 1})
 
 	require.NoError(t, err)
+	require.NotNil(t, published)
+	assert.Equal(t, models.NotificationTypePostVoted, published.Type)
+	assert.Equal(t, int8(1), published.Direction)
 }
 
 func TestVoteForPost_SelfVoteDoesNotPublishNotification(t *testing.T) {

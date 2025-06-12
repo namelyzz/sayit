@@ -143,6 +143,9 @@ func CreateComment(ctx context.Context, userID int64, p *models.ParamCreateComme
 			zap.Int64("post_id", postID),
 			zap.Error(err))
 	}
+	if parentComment == nil {
+		PublishPostCommentedNotification(ctx, userID, post, comment)
+	}
 	if parentComment != nil {
 		PublishCommentRepliedNotification(ctx, userID, comment, parentComment)
 	}

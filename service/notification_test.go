@@ -67,6 +67,17 @@ func TestNotificationPresentation(t *testing.T) {
 			wantLink:    "/post/10?comment=20",
 		},
 		{
+			name: "post commented",
+			event: &models.NotificationEvent{
+				Type:      models.NotificationTypePostCommented,
+				PostID:    10,
+				CommentID: 21,
+			},
+			wantTitle:   "有人评论了你的帖子",
+			wantContent: "点击查看评论",
+			wantLink:    "/post/10?comment=21",
+		},
+		{
 			name: "post upvoted",
 			event: &models.NotificationEvent{
 				Type:      models.NotificationTypePostVoted,
@@ -138,7 +149,7 @@ func TestPublishUserFollowedNotification(t *testing.T) {
 	assert.Equal(t, models.NotificationTypeUserFollowed, published.Type)
 	assert.Equal(t, int64(77), published.RecipientID)
 	assert.Equal(t, int64(42), published.ActorID)
-	assert.Equal(t, "user_followed:77:42", published.DedupeKey)
+	assert.Contains(t, published.DedupeKey, "user_followed:")
 }
 
 func TestPublishUserFollowedNotification_SelfSkipped(t *testing.T) {
@@ -171,7 +182,27 @@ func TestPublishPostVotedNotification(t *testing.T) {
 	assert.Equal(t, int64(42), published.ActorID)
 	assert.Equal(t, int64(100), published.PostID)
 	assert.Equal(t, int8(-1), published.Direction)
-	assert.Equal(t, "post_voted:100:42", published.DedupeKey)
+	assert.Contains(t, published.DedupeKey, "post_voted:")
+}
+
+func TestPublishPostCommentedNotification(t *testing.T) {
+	restore := mockNotificationDeps()
+	defer restore()
+
+	var published *models.NotificationEvent
+	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
+		published = event
+		return "1-0", nil
+	}
+
+	PublishPostCommentedNotification(context.Background(), 42, &models.Post{PostID: 100, AuthorID: 77}, &models.Comment{CommentID: 2001, PostID: 100})
+
+	require.NotNil(t, published)
+	assert.Equal(t, models.NotificationTypePostCommented, published.Type)
+	assert.Equal(t, int64(77), published.RecipientID)
+	assert.Equal(t, int64(42), published.ActorID)
+	assert.Equal(t, int64(100), published.PostID)
+	assert.Equal(t, int64(2001), published.CommentID)
 }
 
 func TestPublishPostVotedNotification_SelfSkipped(t *testing.T) {
@@ -184,6 +215,18 @@ func TestPublishPostVotedNotification_SelfSkipped(t *testing.T) {
 	}
 
 	PublishPostVotedNotification(context.Background(), 42, &models.Post{PostID: 100, AuthorID: 42}, 1)
+}
+
+func TestPublishPostCommentedNotification_SelfSkipped(t *testing.T) {
+	restore := mockNotificationDeps()
+	defer restore()
+
+	publishNotificationEventFunc = func(ctx context.Context, event *models.NotificationEvent) (string, error) {
+		t.Fatal("self post comment should not publish notification")
+		return "", nil
+	}
+
+	PublishPostCommentedNotification(context.Background(), 42, &models.Post{PostID: 100, AuthorID: 42}, &models.Comment{CommentID: 2001, PostID: 100})
 }
 
 func TestNotificationCooldownScope(t *testing.T) {
@@ -208,9 +251,14 @@ func TestNotificationCooldownScope(t *testing.T) {
 			want:  "comment_replied:42:77:comment:1002",
 		},
 		{
+			name:  "post commented",
+			event: &models.NotificationEvent{Type: models.NotificationTypePostCommented, ActorID: 42, RecipientID: 77, CommentID: 1003},
+			want:  "post_commented:42:77:comment:1003",
+		},
+		{
 			name:  "post voted",
-			event: &models.NotificationEvent{Type: models.NotificationTypePostVoted, ActorID: 42, RecipientID: 77, PostID: 2001},
-			want:  "post_voted:42:77:post:2001",
+			event: &models.NotificationEvent{Type: models.NotificationTypePostVoted, ActorID: 42, RecipientID: 77, PostID: 2001, Direction: -1},
+			want:  "post_voted:42:77:post:2001:direction:-1",
 		},
 	}
 
