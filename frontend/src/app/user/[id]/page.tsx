@@ -6,9 +6,14 @@ import { useParams } from "next/navigation";
 import {
   CalendarDays,
   Clock3,
+  Compass,
+  Flame,
+  Headphones,
   Heart,
   MessageSquareText,
   PencilLine,
+  Sprout,
+  Trophy,
   UserCheck,
   UserPlus,
   Users,
@@ -30,40 +35,58 @@ type ProfileListType = "followers" | "following" | null;
 
 const profileBadges = [
   {
-    icon: "💗",
+    icon: Heart,
     title: "欢迎",
     description: "收到第一个赞，说明你的表达已经被人看见。",
-    tone: "from-rose-100 via-white to-rose-50 text-rose-500",
+    color: "text-[#c9a87c]",
+    bgColor: "bg-[#f8f4ef]",
+    borderColor: "border-[#e8ddd0]",
+    shadowColor: "shadow-[inset_0_2px_4px_rgba(201,168,124,0.1)]",
   },
   {
-    icon: "🪐",
+    icon: Compass,
     title: "初次远行",
     description: "加入第二个社区，开始在不同角落留下足迹。",
-    tone: "from-sky-100 via-white to-cyan-50 text-sky-600",
+    color: "text-[#8fa8a0]",
+    bgColor: "bg-[#f5f8f7]",
+    borderColor: "border-[#dce5e2]",
+    shadowColor: "shadow-[inset_0_2px_4px_rgba(143,168,160,0.1)]",
   },
   {
-    icon: "🔥",
+    icon: Flame,
     title: "火花",
     description: "一篇帖子引起热烈讨论，点亮了首页的气氛。",
-    tone: "from-amber-100 via-white to-orange-50 text-orange-500",
+    color: "text-[#b8a08a]",
+    bgColor: "bg-[#f7f4f0]",
+    borderColor: "border-[#e5ddd4]",
+    shadowColor: "shadow-[inset_0_2px_4px_rgba(184,160,138,0.1)]",
   },
   {
-    icon: "🌱",
+    icon: Sprout,
     title: "发芽",
     description: "写下第一篇帖子，让个人主页不再空白。",
-    tone: "from-emerald-100 via-white to-lime-50 text-emerald-600",
+    color: "text-[#a0b8a0]",
+    bgColor: "bg-[#f4f7f4]",
+    borderColor: "border-[#d4e5d4]",
+    shadowColor: "shadow-[inset_0_2px_4px_rgba(160,184,160,0.1)]",
   },
   {
-    icon: "🎧",
+    icon: Headphones,
     title: "认真倾听",
     description: "留下第一条评论，正式加入别人的对话。",
-    tone: "from-violet-100 via-white to-fuchsia-50 text-violet-600",
+    color: "text-[#a0a8b8]",
+    bgColor: "bg-[#f4f5f7]",
+    borderColor: "border-[#d4d8e5]",
+    shadowColor: "shadow-[inset_0_2px_4px_rgba(160,168,184,0.1)]",
   },
   {
-    icon: "🏆",
+    icon: Trophy,
     title: "常驻居民",
     description: "连续活跃了一段时间，已经成了社区里的熟面孔。",
-    tone: "from-yellow-100 via-white to-amber-50 text-yellow-600",
+    color: "text-[#b8a890]",
+    bgColor: "bg-[#f7f5f2]",
+    borderColor: "border-[#e5ddd0]",
+    shadowColor: "shadow-[inset_0_2px_4px_rgba(184,168,144,0.1)]",
   },
 ] as const;
 
@@ -131,29 +154,40 @@ function InfoItem({
 
 function BadgeCabinet() {
   return (
-    <div className="rounded-[24px] border border-[#d6c2a3] bg-[linear-gradient(180deg,#f4ead8_0%,#ebdcc5_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_24px_rgba(123,87,42,0.08)]">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {profileBadges.map((badge) => (
-          <div key={badge.title} className="group relative aspect-square">
-            <div className="absolute inset-0 rounded-[18px] border border-[#b9966c] bg-[linear-gradient(135deg,rgba(255,255,255,0.5),rgba(148,111,71,0.08))] shadow-[inset_0_1px_0_rgba(255,255,255,0.65),inset_0_-8px_14px_rgba(134,97,57,0.08)] transition duration-200 group-hover:border-[#8e6a42] group-hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_14px_24px_rgba(94,64,31,0.18)] group-hover:brightness-105" />
-            <div className="absolute inset-[10px] rounded-[14px] border border-white/70 bg-[rgba(255,248,238,0.92)] transition group-hover:bg-white">
-              <div
-                className={cn(
-                  "flex h-full items-center justify-center rounded-[13px] bg-gradient-to-br text-3xl shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition duration-200 group-hover:scale-[1.04]",
-                  badge.tone
-                )}
-              >
-                <span aria-hidden="true">{badge.icon}</span>
+    <div className="rounded-[20px] border border-[#d6c2a3] bg-[linear-gradient(180deg,#f8f4ef_0%,#f0e8dc_100%)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_8px_20px_rgba(123,87,42,0.06),0_2px_4px_rgba(123,87,42,0.04)]">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        {profileBadges.map((badge) => {
+          const IconComponent = badge.icon;
+          return (
+            <div key={badge.title} className="group relative aspect-square">
+              {/* 外层壁龛框架 */}
+              <div className="absolute inset-0 rounded-[16px] border border-[#c8b89a] bg-[linear-gradient(145deg,#f0e8dc_0%,#e8ddd0_100%)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.06),inset_0_-1px_2px_rgba(255,255,255,0.8),0_4px_8px_rgba(123,87,42,0.08)] transition duration-300 group-hover:border-[#b8a88a] group-hover:shadow-[inset_0_2px_4px_rgba(0,0,0,0.08),inset_0_-1px_2px_rgba(255,255,255,0.9),0_6px_12px_rgba(123,87,42,0.12)]" />
+              
+              {/* 内层凹陷壁龛 */}
+              <div className="absolute inset-[8px] rounded-[12px] border border-[#d4c8b8] bg-[linear-gradient(180deg,#f5f0ea_0%,#ede5d8_100%)] shadow-[inset_0_3px_6px_rgba(0,0,0,0.08),inset_0_-1px_2px_rgba(255,255,255,0.6)] transition duration-300 group-hover:shadow-[inset_0_4px_8px_rgba(0,0,0,0.1),inset_0_-1px_2px_rgba(255,255,255,0.7)]">
+                {/* 图标容器 */}
+                <div className={cn(
+                  "flex h-full items-center justify-center rounded-[10px] transition duration-300 group-hover:scale-105",
+                  badge.bgColor,
+                  badge.borderColor,
+                  badge.shadowColor
+                )}>
+                  <IconComponent 
+                    className={cn("h-8 w-8 transition duration-300 group-hover:scale-110", badge.color)} 
+                    strokeWidth={1.5}
+                  />
+                </div>
+              </div>
+
+              {/* 悬浮提示 */}
+              <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-3 w-52 -translate-x-1/2 rounded-2xl border border-border bg-white px-4 py-3 text-left opacity-0 shadow-[0_18px_40px_rgba(15,23,42,0.14)] transition duration-200 group-hover:translate-y-1 group-hover:opacity-100">
+                <div className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-l border-t border-border bg-white" />
+                <p className="text-sm font-semibold text-foreground">{badge.title}</p>
+                <p className="mt-1 text-sm leading-6 text-muted-strong">{badge.description}</p>
               </div>
             </div>
-
-            <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-3 w-52 -translate-x-1/2 rounded-2xl border border-border bg-white px-4 py-3 text-left opacity-0 shadow-[0_18px_40px_rgba(15,23,42,0.14)] transition duration-200 group-hover:translate-y-1 group-hover:opacity-100">
-              <div className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-l border-t border-border bg-white" />
-              <p className="text-sm font-semibold text-foreground">{badge.title}</p>
-              <p className="mt-1 text-sm leading-6 text-muted-strong">{badge.description}</p>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

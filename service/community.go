@@ -74,3 +74,8 @@ func GetHotCommunityList(limit int) ([]*models.HotCommunity, error) {
 
 	return results, nil
 }
+
+// SearchCommunitiesByName 根据社区名模糊搜索社区
+func SearchCommunitiesByName(keyword string, limit int) ([]*models.SearchSuggestItem, error) {
+	return mysql.SearchCommunitiesByName(keyword, limit)
+}

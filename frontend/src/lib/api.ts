@@ -165,6 +165,11 @@ export interface NotificationUnreadCountResponse {
   count: number;
 }
 
+export interface SearchSuggestItem {
+  id: string;
+  name: string;
+}
+
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
@@ -341,7 +346,9 @@ class ApiClient {
     page?: number;
     size?: number;
     community_id?: string;
+    community_name?: string;
     user_name?: string;
+    keyword?: string;
     sort_by?: string;
     order?: string;
   }) {
@@ -349,7 +356,9 @@ class ApiClient {
     if (params?.page) searchParams.set("page", params.page.toString());
     if (params?.size) searchParams.set("size", params.size.toString());
     if (params?.community_id) searchParams.set("community_id", params.community_id);
+    if (params?.community_name) searchParams.set("community_name", params.community_name);
     if (params?.user_name) searchParams.set("user_name", params.user_name);
+    if (params?.keyword) searchParams.set("keyword", params.keyword);
     if (params?.sort_by) searchParams.set("sort_by", params.sort_by);
     if (params?.order) searchParams.set("order", params.order);
 
@@ -475,6 +484,17 @@ class ApiClient {
     return this.request("/notifications/read_all", {
       method: "POST",
     });
+  }
+
+  // ========== 搜索相关 API ==========
+
+  async getSearchSuggest(keyword: string, type: "community" | "user", limit?: number) {
+    const searchParams = new URLSearchParams();
+    searchParams.set("q", keyword);
+    searchParams.set("type", type);
+    if (limit) searchParams.set("limit", limit.toString());
+    const query = searchParams.toString();
+    return this.request<SearchSuggestItem[]>(`/search/suggest?${query}`);
   }
 }
 

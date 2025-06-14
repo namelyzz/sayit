@@ -46,3 +46,9 @@ func (CommunityFollow) TableName() string {
 type FollowStatus struct {
 	IsFollowed bool `json:"is_followed"`
 }
+
+// SearchSuggestItem 搜索建议项
+type SearchSuggestItem struct {
+	ID   SnowflakeID `json:"id"`
+	Name string      `json:"name"`
+}

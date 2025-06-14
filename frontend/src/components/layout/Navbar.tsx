@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Bell, ChevronRight, Compass, Home, LogIn, LogOut, PenLine, Search } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Button from "@/components/ui/Button";
+import SearchPanel from "@/components/search/SearchPanel";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const avatarText = user?.user_name?.slice(0, 1).toUpperCase() || "S";
   const unreadLabel = unreadCount > 99 ? "99+" : String(unreadCount);
 
@@ -75,21 +77,17 @@ export default function Navbar() {
             </span>
           </Link>
 
-          <form
-            className="hidden min-w-0 flex-1 justify-center md:flex"
-            role="search"
-            onSubmit={(event) => event.preventDefault()}
+          <div
+            className="hidden min-w-0 flex-1 cursor-pointer md:flex"
+            onClick={() => setIsSearchOpen(true)}
           >
             <div className="relative w-full max-w-xl">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <input
-                type="search"
-                aria-label="搜索帖子或社区"
-                placeholder="搜索帖子或社区"
-                className="h-10 w-full rounded-lg bg-white/90 pl-9 pr-3 text-sm text-foreground shadow-sm transition placeholder:text-slate-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-white/50"
-              />
+              <div className="h-10 w-full rounded-lg bg-white/90 pl-9 pr-3 text-sm text-slate-500 shadow-sm transition hover:bg-white flex items-center">
+                点击打开高级搜索...
+              </div>
             </div>
-          </form>
+          </div>
 
           <div className="flex shrink-0 items-center gap-2">
             {user ? (
@@ -174,6 +172,8 @@ export default function Navbar() {
           })}
         </div>
       </nav>
+
+      <SearchPanel isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </>
   );
 }

@@ -279,3 +279,8 @@ func normalizeUserFollowPagination(page, size int) (int, int) {
 	}
 	return page, size
 }
+
+// SearchUsersByName 根据用户名模糊搜索用户
+func SearchUsersByName(keyword string, limit int) ([]*models.SearchSuggestItem, error) {
+	return mysql.SearchUsersByName(keyword, limit)
+}

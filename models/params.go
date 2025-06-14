@@ -58,10 +58,11 @@ type SortCondition struct {
 // 通过 URL 查询参数传递，例如: /api/v1/posts?community_id=1&page=2&size=10&sort_by=score
 // form tag 用于 Gin 的 ShouldBindQuery 绑定查询参数
 type ParamPostList struct {
-	CommunityID int64  `json:"community_id" form:"community_id"` // 社区ID筛选（精确匹配）
-	AuthorID    int64  `json:"author_id" form:"author_id"`       // 作者ID筛选（精确匹配）
-	UserName    string `json:"user_name" form:"user_name"`       // 作者名筛选（模糊搜索）
-	Keyword     string `json:"keyword" form:"keyword"`           // 标题关键词筛选（模糊搜索）
+	CommunityID   int64  `json:"community_id" form:"community_id"`       // 社区ID筛选（精确匹配）
+	CommunityName string `json:"community_name" form:"community_name"`   // 社区名筛选（模糊搜索）
+	AuthorID      int64  `json:"author_id" form:"author_id"`             // 作者ID筛选（精确匹配）
+	UserName      string `json:"user_name" form:"user_name"`             // 作者名筛选（模糊搜索）
+	Keyword       string `json:"keyword" form:"keyword"`                 // 标题关键词筛选（模糊搜索）
 
 	// 按 创建时间 的范围查询（Unix 时间戳，秒级）
 	StartTime *int64 `json:"start_time" form:"start_time"` // 起始时间（含）
@@ -98,9 +99,10 @@ func (p *ParamPostList) ValidateAndSetDefaults() error {
 		p.Size = MaxPageSize
 	}
 
-	// 去除 keyword 和 username 两边空格，避免空格影响 LIKE 查询
+	// 去除 keyword、username、community_name 两边空格，避免空格影响 LIKE 查询
 	p.Keyword = strings.TrimSpace(p.Keyword)
 	p.UserName = strings.TrimSpace(p.UserName)
+	p.CommunityName = strings.TrimSpace(p.CommunityName)
 
 	// 时间范围校验: 起始时间不能大于结束时间
 	if p.StartTime != nil && p.EndTime != nil {

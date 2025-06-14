@@ -17,18 +17,16 @@
 
 </div>
 
-## Table of Contents
+## 目录
 
-- [About The Project](#about-the-project)
+- [项目简述](#about)
 - [Features](#features)
-- [Getting Started](#getting-started)
-- [Usage](#usage)
+- [开始](#开始)
 - [Roadmap](#roadmap)
-- [Contributing](#contributing)
 - [License](#license)
 - [Contact](#contact)
 
-## About The Project
+## 项目简述
 
 Sayit 是一个面向学习与实践的社区论坛系统。它并不是一个只展示单点能力的 demo，而是尽量还原真实业务中的典型后端和前端场景：
 
@@ -66,7 +64,39 @@ Sayit 是一个面向学习与实践的社区论坛系统。它并不是一个�
 - 🎨 Next.js 前端页面与铃铛入口
 - 🧪 单元测试覆盖核心业务逻辑
 
-## 技术亮点与设计细节
+## 项目预览
+
+### 首页
+
+![首页](img/01_home.png)
+
+社区帖子列表，支持按热度、时间排序，可进行搜索。
+
+### 个人中心
+
+![个人中心](img/02_personal_center.png)
+
+用户个人主页，展示发布的帖子和评论，可查看粉丝列表和关注列表，支持编辑签名。
+
+### 帖子详情
+
+![帖子详情](img/03_post.png)
+
+帖子完整内容，包含评论树、投票按钮、评论输入框。
+
+### 通知中心
+
+![通知中心](img/04_notice.png)
+
+站内通知列表，显示未读/已读状态，支持单条已读和全部已读。
+
+### 关注列表弹层
+
+![关注弹窗](img/05_follow_information_pop-up.png)
+
+以弹层的形式给出一个子页面，方便快速返回原本访问的页面。
+
+## 部分技术与设计细节
 
 ### 数据一致性保障：Outbox 补偿、乐观重试与对账机制
 
@@ -263,7 +293,7 @@ MySQL 与 Redis 双写场景下，直接操作存在部分失败导致数据不�
 - **高性能**：单次 Redis 事务完成所有操作，无锁竞争，吞吐量高。
 - **状态可追溯**：支持查询用户当前投票状态，前端可实时展示投票高亮。
 
-## Getting Started
+## 开始
 
 ### Prerequisites
 

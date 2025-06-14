@@ -162,6 +162,7 @@ func buildPostListQuery() *gorm.DB {
 // applyPostListFilters 应用帖子列表的过滤条件
 // 支持的过滤条件:
 //   - CommunityID: 精确匹配社区ID
+//   - CommunityName: 社区名模糊搜索（LIKE %keyword%）
 //   - AuthorID: 作者ID精确匹配
 //   - UserName: 作者名模糊搜索（LIKE %keyword%）
 //   - Keyword: 标题模糊搜索（LIKE %keyword%）
@@ -174,6 +175,9 @@ func applyPostListFilters(query *gorm.DB, p *models.ParamPostList) *gorm.DB {
 
 	if p.CommunityID != 0 {
 		query = query.Where("p.community_id = ?", p.CommunityID)
+	}
+	if p.CommunityName != "" {
+		query = query.Where("c.community_name LIKE ?", "%"+p.CommunityName+"%")
 	}
 	if p.AuthorID != 0 {
 		query = query.Where("p.author_id = ?", p.AuthorID)
