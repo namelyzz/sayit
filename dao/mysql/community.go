@@ -139,7 +139,7 @@ func GetHotCommunityList(limit int) (communities []*models.HotCommunity, err err
 	return communities, nil
 }
 
-// SearchCommunitiesByName 根据社区名模糊搜索社区
+// SearchCommunitiesByName 根据社区名搜索社区（右模糊，走索引）
 func SearchCommunitiesByName(keyword string, limit int) ([]*models.SearchSuggestItem, error) {
 	if limit <= 0 {
 		limit = 10
@@ -151,7 +151,8 @@ func SearchCommunitiesByName(keyword string, limit int) ([]*models.SearchSuggest
 	var communities []*models.SearchSuggestItem
 	res := db.Model(&models.Community{}).
 		Select("community_id AS id, community_name AS name").
-		Where("community_name LIKE ?", "%"+keyword+"%").
+		Where("community_name LIKE ?", keyword+"%").
+		Order("community_name ASC").
 		Limit(limit).
 		Find(&communities)
 

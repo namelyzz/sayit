@@ -27,7 +27,6 @@ func SetupRouter(mode string) *gin.Engine {
 	v1.GET("/users/:id/followers", controller.GetUserFollowersHandler)
 	v1.GET("/users/:id/following", controller.GetUserFollowingHandler)
 	v1.GET("/users/:id", controller.GetUserProfileHandler) // 用户公开资料
-	v1.GET("/search/suggest", controller.SearchSuggestHandler) // 搜索建议
 
 	// 用户模块
 	v1.POST("/signup", controller.SignupHandler) // 注册
@@ -60,6 +59,9 @@ func SetupRouter(mode string) *gin.Engine {
 		v1.POST("/unfollow", controller.UnfollowCommunityHandler)
 		v1.GET("/is_followed", controller.IsFollowedCommunityHandler)
 		v1.GET("/followed_communities", controller.GetFollowedCommunityListHandler)
+
+		// 搜索相关
+		v1.GET("/search/suggest", controller.SearchSuggestHandler) // 搜索建议
 	}
 
 	r.NoRoute(func(c *gin.Context) {

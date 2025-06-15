@@ -103,7 +103,7 @@ func UpdateUserSignature(userID int64, signature string) error {
 	return nil
 }
 
-// SearchUsersByName 根据用户名模糊搜索用户
+// SearchUsersByName 根据用户名搜索用户（右模糊，走索引）
 func SearchUsersByName(keyword string, limit int) ([]*models.SearchSuggestItem, error) {
 	if limit <= 0 {
 		limit = 10
@@ -115,7 +115,8 @@ func SearchUsersByName(keyword string, limit int) ([]*models.SearchSuggestItem, 
 	var users []*models.SearchSuggestItem
 	res := db.Model(&models.User{}).
 		Select("user_id AS id, username AS name").
-		Where("username LIKE ?", "%"+keyword+"%").
+		Where("username LIKE ?", keyword+"%").
+		Order("username ASC").
 		Limit(limit).
 		Find(&users)
 

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import PostCard from "@/components/ui/PostCard";
 import EmptyState from "@/components/ui/EmptyState";
@@ -21,6 +21,7 @@ function normalizePosts(data: PostsResponse | PostListItem[] | undefined) {
 }
 
 function SearchContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
 
@@ -43,6 +44,12 @@ function SearchContent() {
 
   useEffect(() => {
     if (authLoading) return;
+
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     if (!hasSearchParams) {
       setLoading(false);
       setPosts([]);
@@ -119,6 +126,25 @@ function SearchContent() {
     if (userName) parts.push(`用户"${userName}"`);
     return parts.join(" + ");
   };
+
+  if (!user && !authLoading) {
+    return (
+      <PageShell>
+        <EmptyState
+          title="登录后使用搜索功能"
+          description="搜索功能需要登录后才能使用。"
+          action={
+            <Link
+              href="/login"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-white transition hover:bg-primary-dark"
+            >
+              去登录
+            </Link>
+          }
+        />
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell>

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Bell, ChevronRight, Compass, Home, LogIn, LogOut, PenLine, Search } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { Bell, ChevronRight, Compass, Home, LogIn, LogOut, PenLine, Search, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Button from "@/components/ui/Button";
 import SearchPanel from "@/components/search/SearchPanel";
@@ -19,10 +19,12 @@ const mobileLinks = [
 ];
 
 export default function Navbar() {
+  const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState("");
   const avatarText = user?.user_name?.slice(0, 1).toUpperCase() || "S";
   const unreadLabel = unreadCount > 99 ? "99+" : String(unreadCount);
 
@@ -63,10 +65,18 @@ export default function Navbar() {
     };
   }, [refreshUnreadCount, user]);
 
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchKeyword.trim()) return;
+    const kw = searchKeyword.trim();
+    setSearchKeyword("");
+    router.push(`/search?keyword=${encodeURIComponent(kw)}`);
+  };
+
   return (
     <>
       <header className="z-30 bg-transparent">
-        <div className="flex h-16 items-center justify-between gap-4 px-5 md:px-7">
+        <div className="relative flex h-16 items-center justify-between gap-4 px-5 md:px-7">
           <Link href="/" className="flex shrink-0 items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-base font-bold text-white shadow-sm">
               S
@@ -77,16 +87,36 @@ export default function Navbar() {
             </span>
           </Link>
 
-          <div
-            className="hidden min-w-0 flex-1 cursor-pointer md:flex"
-            onClick={() => setIsSearchOpen(true)}
-          >
-            <div className="relative w-full max-w-xl">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <div className="h-10 w-full rounded-lg bg-white/90 pl-9 pr-3 text-sm text-slate-500 shadow-sm transition hover:bg-white flex items-center">
-                点击打开高级搜索...
+          <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block">
+            <form onSubmit={handleSearchSubmit} className="flex w-[480px] items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSearchOpen(true)}
+                className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-white/90 px-3 text-slate-600 shadow-sm transition hover:bg-white"
+                title="高级搜索"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+              </button>
+
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  placeholder="搜索帖子..."
+                  className="h-10 w-full rounded-lg bg-white/90 pl-9 pr-3 text-sm text-foreground shadow-sm transition placeholder:text-slate-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-white/50"
+                />
               </div>
-            </div>
+
+              <button
+                type="submit"
+                className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-primary px-3 text-white shadow-sm transition hover:bg-primary-dark"
+                title="搜索"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            </form>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">

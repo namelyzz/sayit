@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, X } from "lucide-react";
+import { ChevronUp, Search, X } from "lucide-react";
 import { apiClient, SearchSuggestItem } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 interface SearchPanelProps {
   isOpen: boolean;
@@ -13,21 +13,21 @@ interface SearchPanelProps {
 
 export default function SearchPanel({ isOpen, onClose }: SearchPanelProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const panelRef = useRef<HTMLDivElement>(null);
   const communityInputRef = useRef<HTMLInputElement>(null);
-  const userInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const [keyword, setKeyword] = useState("");
   const [communityName, setCommunityName] = useState("");
   const [userName, setUserName] = useState("");
 
   const [communitySuggestions, setCommunitySuggestions] = useState<SearchSuggestItem[]>([]);
-  const [userSuggestions, setUserSuggestions] = useState<SearchSuggestItem[]>([]);
   const [showCommunitySuggestions, setShowCommunitySuggestions] = useState(false);
-  const [showUserSuggestions, setShowUserSuggestions] = useState(false);
 
   const communityTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const userTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const hasAnyInput = keyword.trim() || communityName.trim() || userName.trim();
 
   const fetchCommunitySuggestions = useCallback(async (q: string) => {
     if (q.length < 1) {
@@ -35,23 +35,10 @@ export default function SearchPanel({ isOpen, onClose }: SearchPanelProps) {
       return;
     }
     try {
-      const res = await apiClient.getSearchSuggest(q, "community", 8);
+      const res = await apiClient.getSearchSuggest(q, "community", 5);
       setCommunitySuggestions(res.data);
     } catch {
       setCommunitySuggestions([]);
-    }
-  }, []);
-
-  const fetchUserSuggestions = useCallback(async (q: string) => {
-    if (q.length < 1) {
-      setUserSuggestions([]);
-      return;
-    }
-    try {
-      const res = await apiClient.getSearchSuggest(q, "user", 8);
-      setUserSuggestions(res.data);
-    } catch {
-      setUserSuggestions([]);
     }
   }, []);
 
@@ -68,43 +55,41 @@ export default function SearchPanel({ isOpen, onClose }: SearchPanelProps) {
   }, [communityName, showCommunitySuggestions, fetchCommunitySuggestions]);
 
   useEffect(() => {
-    clearTimeout(userTimerRef.current);
-    if (userName && showUserSuggestions) {
-      userTimerRef.current = setTimeout(() => {
-        fetchUserSuggestions(userName);
-      }, 300);
-    } else {
-      setUserSuggestions([]);
-    }
-    return () => clearTimeout(userTimerRef.current);
-  }, [userName, showUserSuggestions, fetchUserSuggestions]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setShowCommunitySuggestions(false);
-        setShowUserSuggestions(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen]);
-
-  useEffect(() => {
     if (!isOpen) {
       setKeyword("");
       setCommunityName("");
       setUserName("");
       setCommunitySuggestions([]);
-      setUserSuggestions([]);
       setShowCommunitySuggestions(false);
-      setShowUserSuggestions(false);
     }
   }, [isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const clickedInsideInput = communityInputRef.current?.contains(target);
+      const clickedInsideSuggestions = suggestionsRef.current?.contains(target);
+
+      if (!clickedInsideInput && !clickedInsideSuggestions) {
+        setShowCommunitySuggestions(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  const handleSubmit = () => {
+    if (!hasAnyInput) return;
+
+    if (!user) {
+      router.push("/login");
+      onClose();
+      return;
+    }
+
     const params = new URLSearchParams();
     if (keyword.trim()) params.set("keyword", keyword.trim());
     if (communityName.trim()) params.set("community_name", communityName.trim());
@@ -117,15 +102,24 @@ export default function SearchPanel({ isOpen, onClose }: SearchPanelProps) {
   const selectCommunity = (item: SearchSuggestItem) => {
     setCommunityName(item.name);
     setShowCommunitySuggestions(false);
-    userInputRef.current?.focus();
   };
 
-  const selectUser = (item: SearchSuggestItem) => {
-    setUserName(item.name);
-    setShowUserSuggestions(false);
+  const handleCommunityKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      setShowCommunitySuggestions(false);
+      if (hasAnyInput) {
+        handleSubmit();
+      }
+    }
+    if (e.key === "Escape") {
+      setShowCommunitySuggestions(false);
+    }
   };
 
   if (!isOpen) return null;
+
+  const showSuggestions = showCommunitySuggestions && communitySuggestions.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh]">
@@ -144,7 +138,7 @@ export default function SearchPanel({ isOpen, onClose }: SearchPanelProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
               帖子关键字
@@ -153,12 +147,18 @@ export default function SearchPanel({ isOpen, onClose }: SearchPanelProps) {
               type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && hasAnyInput) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
               placeholder="搜索帖子标题..."
               className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
-          <div className="relative">
+          <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
               社区名称
             </label>
@@ -166,13 +166,33 @@ export default function SearchPanel({ isOpen, onClose }: SearchPanelProps) {
               ref={communityInputRef}
               type="text"
               value={communityName}
-              onChange={(e) => setCommunityName(e.target.value)}
+              onChange={(e) => {
+                setCommunityName(e.target.value);
+                setShowCommunitySuggestions(true);
+              }}
               onFocus={() => setShowCommunitySuggestions(true)}
-              placeholder="模糊匹配社区名..."
+              onKeyDown={handleCommunityKeyDown}
+              placeholder="输入社区名前缀匹配..."
               className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
-            {showCommunitySuggestions && communitySuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          </div>
+
+          {showSuggestions && (
+            <div
+              ref={suggestionsRef}
+              className="overflow-hidden rounded-lg border border-slate-200 bg-white"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5">
+                <span className="text-xs text-slate-400">选择社区</span>
+                <button
+                  type="button"
+                  onClick={() => setShowCommunitySuggestions(false)}
+                  className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="max-h-[200px] overflow-y-auto py-1">
                 {communitySuggestions.map((item) => (
                   <button
                     key={item.id}
@@ -184,46 +204,48 @@ export default function SearchPanel({ isOpen, onClose }: SearchPanelProps) {
                   </button>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="relative">
+          <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
               用户名
             </label>
             <input
-              ref={userInputRef}
               type="text"
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
-              onFocus={() => setShowUserSuggestions(true)}
-              placeholder="模糊匹配用户名..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && hasAnyInput) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
+              placeholder="输入用户名..."
               className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
-            {showUserSuggestions && userSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                {userSuggestions.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => selectUser(item)}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  >
-                    {item.name}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           <button
-            type="submit"
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-white transition hover:bg-primary-dark"
+            type="button"
+            onClick={handleSubmit}
+            disabled={!hasAnyInput}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Search className="h-4 w-4" />
             搜索
           </button>
-        </form>
+        </div>
+
+        {!user && (
+          <p className="mt-3 text-center text-xs text-slate-500">
+            搜索功能需要{" "}
+            <button onClick={() => { router.push("/login"); onClose(); }} className="text-primary hover:underline">
+              登录
+            </button>{" "}
+            后使用
+          </p>
+        )}
       </div>
     </div>
   );
