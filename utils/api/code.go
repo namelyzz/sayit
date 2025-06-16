@@ -14,6 +14,8 @@ const (
 	CodeInvalidToken
 
 	CodeRateLimitExceeded
+
+	CodeCommunityExist
 )
 
 var codeMsgMap = map[ResCode]string{
@@ -28,6 +30,8 @@ var codeMsgMap = map[ResCode]string{
 	CodeInvalidToken: "无效的token",
 
 	CodeRateLimitExceeded: "您发言太快了，请休息一下再试。",
+
+	CodeCommunityExist: "社区名称已存在",
 }
 
 func (c ResCode) Msg() string {

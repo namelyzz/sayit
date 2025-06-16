@@ -3,6 +3,7 @@ package mysql
 import (
 	"github.com/namelyzz/sayit/models"
 	"github.com/namelyzz/sayit/utils/api"
+	"github.com/namelyzz/sayit/utils/snowflake"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -162,4 +163,90 @@ func SearchCommunitiesByName(keyword string, limit int) ([]*models.SearchSuggest
 	}
 
 	return communities, nil
+}
+
+// SearchCommunitiesByKeyword 根据关键字搜索社区（支持社区名和简介模糊搜索）
+func SearchCommunitiesByKeyword(keyword string, page, size int) ([]*models.CommunityListItem, int64, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 || size > 50 {
+		size = 20
+	}
+
+	var communities []*models.CommunityListItem
+	var total int64
+
+	// 构建基础查询条件（不含 JOIN，用于计数）
+	baseQuery := db.Model(&models.Community{})
+	if keyword != "" {
+		likePattern := "%" + keyword + "%"
+		baseQuery = baseQuery.Where("community.community_name LIKE ? OR community.introduction LIKE ?", likePattern, likePattern)
+	}
+
+	// 获取满足条件的社区总数
+	err := baseQuery.Count(&total).Error
+	if err != nil {
+		zap.L().Error("count communities failed", zap.Error(err))
+		return nil, 0, err
+	}
+
+	// 构建带 JOIN 的查询（用于获取帖子数量）
+	query := db.Model(&models.Community{}).
+		Select("community.community_id, community.community_name, community.introduction, community.create_time, COUNT(post.post_id) AS post_count").
+		Joins("LEFT JOIN post ON post.community_id = community.community_id AND post.status = 1")
+
+	if keyword != "" {
+		likePattern := "%" + keyword + "%"
+		query = query.Where("community.community_name LIKE ? OR community.introduction LIKE ?", likePattern, likePattern)
+	}
+
+	// 获取分页数据
+	offset := (page - 1) * size
+	err = query.Group("community.community_id, community.community_name, community.introduction, community.create_time").
+		Order("post_count DESC, community.create_time DESC").
+		Offset(offset).
+		Limit(size).
+		Find(&communities).Error
+
+	if err != nil {
+		zap.L().Error("search communities by keyword failed", zap.Error(err))
+		return nil, 0, err
+	}
+
+	return communities, total, nil
+}
+
+// CreateCommunity 创建社区
+func CreateCommunity(name, introduction string) (*models.CommunityDetail, error) {
+	// 检查社区名称是否已存在
+	var count int64
+	err := db.Model(&models.Community{}).Where("community_name = ?", name).Count(&count).Error
+	if err != nil {
+		zap.L().Error("check community name failed", zap.Error(err))
+		return nil, err
+	}
+	if count > 0 {
+		return nil, api.ErrorCommunityExist
+	}
+
+	// 生成社区ID
+	communityID := snowflake.GenID()
+
+	// 创建社区记录
+	community := &models.CommunityDetail{
+		ID:           models.SnowflakeID(communityID),
+		Name:         name,
+		Introduction: introduction,
+	}
+
+	res := db.Create(community)
+	if res.Error != nil {
+		zap.L().Error("create community failed",
+			zap.String("name", name),
+			zap.Error(res.Error))
+		return nil, res.Error
+	}
+
+	return community, nil
 }

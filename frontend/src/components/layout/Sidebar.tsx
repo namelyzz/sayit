@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Flame, Heart, Home, RefreshCw, Sparkles } from "lucide-react";
+import { Flame, Heart, Home, RefreshCw, Sparkles, Users } from "lucide-react";
 import { apiClient, type CommunitySummary, type HotCommunity } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -131,6 +131,7 @@ export default function Sidebar() {
         <SectionBlock>
           <nav className="space-y-1">
             <CommunityLink href="/" label="首页" icon={<Home className="h-4 w-4" />} tone="primary" />
+            <CommunityLink href="/communities" label="社区" icon={<Users className="h-4 w-4" />} tone="primary" />
           </nav>
         </SectionBlock>
 

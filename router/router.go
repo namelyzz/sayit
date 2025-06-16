@@ -18,6 +18,7 @@ func SetupRouter(mode string) *gin.Engine {
 	v1.GET("/random_communities", controller.RandomCommunityHandler)      // 随机推荐社区
 	v1.GET("/community", controller.CommunityHandler)                     // 社区列表
 	v1.GET("/community/:id", controller.CommunityDetailHandler)           // 社区详情
+	v1.GET("/communities", controller.GetCommunitiesHandler)              // 社区列表（带搜索和分页）
 	v1.GET("/posts", controller.GetPostListHandler)                       // 帖子列表
 	v1.GET("/post_detail/:id", controller.GetPostDetailHandler)           // 帖子详情
 	v1.GET("/post/:id/comments", controller.GetCommentListHandler)        // 帖子评论列表
@@ -59,6 +60,9 @@ func SetupRouter(mode string) *gin.Engine {
 		v1.POST("/unfollow", controller.UnfollowCommunityHandler)
 		v1.GET("/is_followed", controller.IsFollowedCommunityHandler)
 		v1.GET("/followed_communities", controller.GetFollowedCommunityListHandler)
+
+		// 创建社区
+		v1.POST("/create_community", controller.CreateCommunityHandler)
 
 		// 搜索相关
 		v1.GET("/search/suggest", controller.SearchSuggestHandler) // 搜索建议

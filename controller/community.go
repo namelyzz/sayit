@@ -5,6 +5,7 @@ import (
 	"github.com/namelyzz/sayit/models"
 	"github.com/namelyzz/sayit/service"
 	"github.com/namelyzz/sayit/utils/api"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"strconv"
 )
@@ -176,4 +177,59 @@ func GetFollowedCommunityListHandler(c *gin.Context) {
 	}
 
 	api.ResponseSuccess(c, communities)
+}
+
+// GetCommunitiesHandler 获取社区列表（支持搜索和分页）
+func GetCommunitiesHandler(c *gin.Context) {
+	keyword := c.Query("keyword")
+	pageStr := c.DefaultQuery("page", "1")
+	sizeStr := c.DefaultQuery("size", "20")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page <= 0 {
+		page = 1
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil || size <= 0 || size > 50 {
+		size = 20
+	}
+
+	data, err := service.GetCommunityListWithSearch(keyword, page, size)
+	if err != nil {
+		zap.L().Error("service.GetCommunityListWithSearch() failed", zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, data)
+}
+
+// CreateCommunityHandler 创建社区
+func CreateCommunityHandler(c *gin.Context) {
+	// 检查用户是否登录
+	_, err := api.GetCurrentUserID(c)
+	if err != nil {
+		api.ResponseError(c, api.CodeNeedLogin)
+		return
+	}
+
+	var req models.ParamCreateCommunity
+	if err := c.ShouldBindJSON(&req); err != nil {
+		api.ResponseError(c, api.CodeInvalidParam)
+		return
+	}
+
+	community, err := service.CreateCommunity(req.Name, req.Introduction)
+	if err != nil {
+		if errors.Is(err, api.ErrorCommunityExist) {
+			api.ResponseError(c, api.CodeCommunityExist)
+			return
+		}
+		zap.L().Error("service.CreateCommunity() failed", zap.Error(err))
+		api.ResponseError(c, api.CodeServerBusy)
+		return
+	}
+
+	api.ResponseSuccess(c, community)
 }

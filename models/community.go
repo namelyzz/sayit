@@ -15,7 +15,7 @@ type CommunityDetail struct {
 	ID           SnowflakeID `json:"community_id" gorm:"column:community_id"`
 	Name         string      `json:"name" gorm:"column:community_name"`
 	Introduction string      `json:"introduction,omitempty" gorm:"introduction"`
-	CreateTime   time.Time   `json:"create_time" gorm:"create_time"`
+	CreateTime   time.Time   `json:"create_time" gorm:"column:create_time;autoCreateTime"`
 }
 
 func (CommunityDetail) TableName() string {
@@ -51,4 +51,25 @@ type FollowStatus struct {
 type SearchSuggestItem struct {
 	ID   SnowflakeID `json:"id"`
 	Name string      `json:"name"`
+}
+
+// CommunityListItem 社区列表项（带详情和帖子数量）
+type CommunityListItem struct {
+	ID           SnowflakeID `json:"community_id" gorm:"column:community_id"`
+	Name         string      `json:"name" gorm:"column:community_name"`
+	Introduction string      `json:"introduction" gorm:"column:introduction"`
+	PostCount    int64       `json:"post_count" gorm:"column:post_count"`
+	CreateTime   time.Time   `json:"create_time" gorm:"column:create_time"`
+}
+
+// CommunityListResponse 社区列表响应
+type CommunityListResponse struct {
+	List  []*CommunityListItem `json:"list"`
+	Total int64                `json:"total"`
+}
+
+// ParamCreateCommunity 创建社区请求参数
+type ParamCreateCommunity struct {
+	Name         string `json:"name" binding:"required,min=2,max=128"`
+	Introduction string `json:"introduction" binding:"required,min=2,max=256"`
 }

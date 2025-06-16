@@ -79,3 +79,21 @@ func GetHotCommunityList(limit int) ([]*models.HotCommunity, error) {
 func SearchCommunitiesByName(keyword string, limit int) ([]*models.SearchSuggestItem, error) {
 	return mysql.SearchCommunitiesByName(keyword, limit)
 }
+
+// GetCommunityListWithSearch 获取社区列表（支持关键字搜索和分页）
+func GetCommunityListWithSearch(keyword string, page, size int) (*models.CommunityListResponse, error) {
+	communities, total, err := mysql.SearchCommunitiesByKeyword(keyword, page, size)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.CommunityListResponse{
+		List:  communities,
+		Total: total,
+	}, nil
+}
+
+// CreateCommunity 创建社区
+func CreateCommunity(name, introduction string) (*models.CommunityDetail, error) {
+	return mysql.CreateCommunity(name, introduction)
+}

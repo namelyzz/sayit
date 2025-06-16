@@ -56,6 +56,19 @@ export interface CommunityDetail {
   create_time: string;
 }
 
+export interface CommunityListItem {
+  community_id: string;
+  name: string;
+  introduction: string;
+  post_count: number;
+  create_time: string;
+}
+
+export interface CommunityListResponse {
+  list: CommunityListItem[];
+  total: number;
+}
+
 export interface PostListItem {
   post_id: string;
   title: string;
@@ -306,6 +319,20 @@ class ApiClient {
     return this.request<CommunitySummary[]>("/community");
   }
 
+  async getCommunitiesWithSearch(params?: {
+    page?: number;
+    size?: number;
+    keyword?: string;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set("page", params.page.toString());
+    if (params?.size) searchParams.set("size", params.size.toString());
+    if (params?.keyword) searchParams.set("keyword", params.keyword);
+
+    const query = searchParams.toString();
+    return this.request<CommunityListResponse>(`/communities${query ? `?${query}` : ""}`);
+  }
+
   async getHotCommunities(limit?: number) {
     const query = limit ? `?limit=${limit}` : "";
     return this.request<HotCommunity[]>(`/hot_communities${query}`);
@@ -340,6 +367,13 @@ class ApiClient {
 
   async getCommunityDetail(id: string) {
     return this.request<CommunityDetail>(`/community/${id}`);
+  }
+
+  async createCommunity(name: string, introduction: string) {
+    return this.request<CommunityDetail>("/create_community", {
+      method: "POST",
+      body: JSON.stringify({ name, introduction }),
+    });
   }
 
   async getPosts(params?: {

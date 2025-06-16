@@ -17,4 +17,6 @@ var (
 
 	ErrorLikeRepeated     = errors.New("重复的点赞")
 	ErrorRateLimitExceeded = errors.New("您发言太快了，请休息一下再试。")
+
+	ErrorCommunityExist = errors.New("社区名称已存在")
 )

@@ -28,7 +28,7 @@ CREATE TABLE `user_follow` (
 DROP TABLE IF EXISTS `community`;
 CREATE TABLE `community` (
                              `id` int(11) NOT NULL AUTO_INCREMENT,
-                             `community_id` int(10) unsigned NOT NULL,
+                             `community_id` bigint(20) NOT NULL,
                              `community_name` varchar(128) COLLATE utf8mb4_general_ci NOT NULL,
                              `introduction` varchar(256) COLLATE utf8mb4_general_ci NOT NULL,
                              `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
