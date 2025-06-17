@@ -429,7 +429,7 @@ class ApiClient {
       body: JSON.stringify({
         title,
         content,
-        community_id: Number(communityId),
+        community_id: communityId,
       }),
     });
   }

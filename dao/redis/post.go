@@ -36,7 +36,7 @@ func CreatePost(ctx context.Context, postID, communityID int64, score float64) e
 	})
 
 	// 3. 社区关联：将帖子 ID 记录到对应社区的集合中
-	cKey := getRedisKey(KeyCommunitySetPF + strconv.Itoa(int(communityID)))
+	cKey := getRedisKey(KeyCommunitySetPF + strconv.FormatInt(communityID, 10))
 	pipe.SAdd(ctx, cKey, postID)
 
 	// 执行事务管道（原子性提交）
@@ -73,8 +73,8 @@ func GetPostIDsInOrder(ctx context.Context, p *models.ParamPostList, offset, lim
 		}
 
 		opt := &redis.ZRangeBy{
-			Min:    minTime,      // 时间范围下界
-			Max:    maxTime,      // 时间范围上界
+			Min:    minTime,       // 时间范围下界
+			Max:    maxTime,       // 时间范围上界
 			Offset: int64(offset), // 跳过前面的记录（分页）
 			Count:  int64(limit),  // 返回的记录数
 		}

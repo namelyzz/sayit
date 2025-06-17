@@ -11,7 +11,7 @@ type Post struct {
 	Title       string      `json:"title" gorm:"column:title" binding:"required"`               // 帖子标题，必填
 	Content     string      `json:"content" gorm:"column:content" binding:"required"`           // 帖子内容，必填
 	AuthorID    SnowflakeID `json:"author_id" gorm:"column:author_id"`                          // 作者用户ID（JWT上下文自动设置）
-	CommunityID int64       `json:"community_id" gorm:"column:community_id" binding:"required"` // 所属社区ID，必填
+	CommunityID SnowflakeID `json:"community_id" gorm:"column:community_id" binding:"required"` // 所属社区ID，必填
 	Status      int32       `json:"status" gorm:"column:status;default:1"`                      // 帖子状态: 1=正常
 	CreateTime  time.Time   `json:"create_time" gorm:"column:create_time;autoCreateTime"`       // 创建时间
 	UpdateTime  time.Time   `json:"update_time" gorm:"column:update_time;autoUpdateTime"`       // 更新时间
@@ -41,7 +41,7 @@ type PostListItem struct {
 	Summary         string      `json:"summary" gorm:"column:summary"` // 内容摘要（SQL中截取前30字符）
 	AuthorID        SnowflakeID `json:"author_id" gorm:"column:author_id"`
 	Username        string      `json:"user_name" gorm:"column:user_name"` // JOIN users 表获取
-	CommunityID     int64       `json:"community_id" gorm:"column:community_id"`
+	CommunityID     SnowflakeID `json:"community_id" gorm:"column:community_id"`
 	CommunityName   string      `json:"community_name" gorm:"column:community_name"` // JOIN community 表获取
 	Status          int32       `json:"status" gorm:"column:status"`
 	CreateTime      time.Time   `json:"create_time" gorm:"column:create_time"`

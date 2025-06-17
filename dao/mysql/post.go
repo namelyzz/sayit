@@ -16,7 +16,7 @@ func CreatePost(p *models.Post) (err error) {
 		zap.L().Error("create post failed",
 			zap.String("operation", "create_post"),
 			zap.Int64("author_id", int64(p.AuthorID)),
-			zap.Int64("community_id", p.CommunityID),
+			zap.Int64("community_id", int64(p.CommunityID)),
 			zap.Error(res.Error))
 		return res.Error
 	}

@@ -136,7 +136,7 @@ func outboxRetryDelay(retryCount int) time.Duration {
 func newPostCreatedOutboxEvent(p *models.Post) (*models.OutboxEvent, error) {
 	payload := models.PostCreatedPayload{
 		PostID:         int64(p.PostID),
-		CommunityID:    p.CommunityID,
+		CommunityID:    int64(p.CommunityID),
 		CreateTimeUnix: p.CreateTime.Unix(),
 	}
 	payloadBytes, err := json.Marshal(payload)

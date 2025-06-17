@@ -19,10 +19,10 @@ var (
 	genIDFunc = snowflake.GenID
 
 	// 评论数缓存相关 mock 变量
-	getCommentCountFunc      = redis.GetCommentCount       // Redis 获取单个帖子评论数
-	setCommentCountFunc      = redis.SetCommentCount       // Redis 设置单个帖子评论数
-	batchGetCommentCountFunc = redis.BatchGetCommentCount  // Redis 批量获取帖子评论数
-	batchSetCommentCountFunc = redis.BatchSetCommentCount  // Redis 批量设置帖子评论数
+	getCommentCountFunc        = redis.GetCommentCount        // Redis 获取单个帖子评论数
+	setCommentCountFunc        = redis.SetCommentCount        // Redis 设置单个帖子评论数
+	batchGetCommentCountFunc   = redis.BatchGetCommentCount   // Redis 批量获取帖子评论数
+	batchSetCommentCountFunc   = redis.BatchSetCommentCount   // Redis 批量设置帖子评论数
 	countCommentsByPostIDFunc  = mysql.CountCommentsByPostID  // MySQL 单个帖子评论数
 	countCommentsByPostIDsFunc = mysql.CountCommentsByPostIDs // MySQL 批量帖子评论数
 )
@@ -92,7 +92,7 @@ func GetPostDetailByID(ctx context.Context, postID int64, currentUserID int64) (
 	}
 
 	// 3. 根据帖子的 community_id 查询社区详情
-	communityID := post.CommunityID
+	communityID := int64(post.CommunityID)
 	detail, err := mysql.GetCommunityDetailByID(communityID)
 	if err != nil {
 		zap.L().Error("mysql.GetCommunityDetailByID failed",

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ChevronRight, Flame, MessageSquareText, ShieldCheck, Users, Heart, FileText, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Badge from "@/components/ui/Badge";
@@ -234,6 +235,7 @@ function PostsDialog({
 
 export default function RightSidebar() {
   const { user, loading: authLoading } = useAuth();
+  const pathname = usePathname();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [activePanel, setActivePanel] = useState<PanelType>(null);
   const [panelError, setPanelError] = useState("");
@@ -250,6 +252,10 @@ export default function RightSidebar() {
   const postsLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const postsRequestIdRef = useRef(0);
   const postsFetchingRef = useRef(false);
+
+  useEffect(() => {
+    setActivePanel(null);
+  }, [pathname]);
 
   useEffect(() => {
     if (authLoading || !user) {
